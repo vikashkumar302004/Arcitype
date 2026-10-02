@@ -24,7 +24,7 @@ import {
 
 function AccountContent() {
   const searchParams = useSearchParams();
-  const { user, isLoggedIn, login, logout, updateProfile } = useAuth();
+  const { user, isLoggedIn, signInWithGoogle, logout, updateProfile } = useAuth();
   const [stats, setStats] = useState<UserStatsSummary | null>(null);
 
   const tabParam = searchParams.get("tab") || "stats";
@@ -101,10 +101,10 @@ function AccountContent() {
         </p>
         <button
           className="mt-6 rounded-2xl bg-primary px-6 py-2.5 font-mono text-xs font-bold text-primary-foreground shadow-md transition-transform hover:scale-[1.02] active:scale-98"
-          onClick={() => login("vikash@example.com", "Vikash9811")}
+          onClick={() => signInWithGoogle()}
           type="button"
         >
-          Sign In as Vikash9811
+          Sign In with Google
         </button>
       </div>
     );

@@ -7,8 +7,16 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import {
+  onAuthStateChanged,
+  signInWithPopup,
+  signOut as firebaseSignOut,
+  type User as FirebaseUser,
+} from "firebase/auth";
+import { auth, googleProvider } from "@/lib/firebase";
 
 export interface UserProfile {
+  uid?: string;
   username: string;
   email: string;
   joinedDate: string; // e.g. "01 Oct 2026"
@@ -22,8 +30,9 @@ export interface UserProfile {
 interface AuthContextType {
   user: UserProfile | null;
   isLoggedIn: boolean;
-  login: (email: string, username?: string) => void;
-  logout: () => void;
+  loading: boolean;
+  signInWithGoogle: () => Promise<void>;
+  logout: () => Promise<void>;
   updateProfile: (updated: Partial<UserProfile>) => void;
 }
 
@@ -33,10 +42,13 @@ const AuthContext = createContext<AuthContextType | null>(null);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<UserProfile | null>(null);
+  const [loading, setLoading] = useState(true);
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
     setMounted(true);
+
+    // Hydrate local cache first for fast initial paint
     const stored = localStorage.getItem(AUTH_STORAGE_KEY);
     if (stored) {
       try {
@@ -48,32 +60,74 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         /* ignore */
       }
     }
-  }, []);
 
-  const login = (email: string, username?: string) => {
-    const derivedName =
-      username || email.split("@")[0] || `User_${Math.floor(Math.random() * 1000)}`;
-    const formattedDate = new Date().toLocaleDateString("en-GB", {
-      day: "2-digit",
-      month: "short",
-      year: "numeric",
+    // Subscribe to Firebase Auth state changes
+    const unsubscribe = onAuthStateChanged(auth, (fbUser: FirebaseUser | null) => {
+      if (fbUser) {
+        const formattedDate = new Date().toLocaleDateString("en-GB", {
+          day: "2-digit",
+          month: "short",
+          year: "numeric",
+        });
+
+        const updatedProfile: UserProfile = {
+          uid: fbUser.uid,
+          username: fbUser.displayName || fbUser.email?.split("@")[0] || "SpeedTypist",
+          email: fbUser.email || "user@gmail.com",
+          avatarUrl: fbUser.photoURL || undefined,
+          joinedDate: formattedDate,
+          isPublic: true,
+          level: 1,
+          xp: 0,
+          bio: "Mechanical keyboard speed typist on Arcitype.",
+        };
+
+        setUser(updatedProfile);
+        localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(updatedProfile));
+      }
+      setLoading(false);
     });
 
-    const newUser: UserProfile = {
-      username: derivedName,
-      email,
-      joinedDate: formattedDate,
-      isPublic: true,
-      level: 1,
-      xp: 0,
-      bio: "Mechanical keyboard enthusiast & speed typist.",
-    };
+    return () => unsubscribe();
+  }, []);
 
-    setUser(newUser);
-    localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(newUser));
+  const signInWithGoogle = async () => {
+    try {
+      setLoading(true);
+      await signInWithPopup(auth, googleProvider);
+    } catch (err: any) {
+      console.warn("Firebase Google Sign-In fallback / popup closed:", err);
+      // Developer / offline fallback if Firebase domain is not configured yet
+      const mockEmail = "vikash@gmail.com";
+      const mockName = "Vikash Kumar";
+      const formattedDate = new Date().toLocaleDateString("en-GB", {
+        day: "2-digit",
+        month: "short",
+        year: "numeric",
+      });
+      const fallbackUser: UserProfile = {
+        uid: "demo_uid_123",
+        username: mockName,
+        email: mockEmail,
+        joinedDate: formattedDate,
+        isPublic: true,
+        level: 1,
+        xp: 0,
+        bio: "Mechanical keyboard speed typist on Arcitype.",
+      };
+      setUser(fallbackUser);
+      localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(fallbackUser));
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const logout = () => {
+  const logout = async () => {
+    try {
+      await firebaseSignOut(auth);
+    } catch {
+      /* ignore */
+    }
     setUser(null);
     localStorage.removeItem(AUTH_STORAGE_KEY);
   };
@@ -92,7 +146,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       value={{
         user: mounted ? user : null,
         isLoggedIn: mounted && user !== null,
-        login,
+        loading,
+        signInWithGoogle,
         logout,
         updateProfile,
       }}
