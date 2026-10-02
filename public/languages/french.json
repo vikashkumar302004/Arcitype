@@ -1,0 +1,11 @@
+{
+  "name": "french",
+  "words": [
+    "monde", "temps", "homme", "vie", "jour", "maison", "travail", "femme", "enfant", "histoire",
+    "chose", "place", "nuit", "ville", "amour", "ami", "eau", "force", "lumière", "mot",
+    "pays", "raison", "œil", "main", "heur", "porte", "cœur", "esprit", "chemin", "voix",
+    "terre", "ciel", "mer", "soleil", "lune", "vent", "feu", "pensée", "rêve", "espoir",
+    "paix", "liberté", "égalité", "fraternité", "justice", "droit", "devoir", "art", "musique", "livre",
+    "science", "nature", "fleur", "arbre", "famille", "père", "mère", "frère", "sœur", "voyage"
+  ]
+}

@@ -1,0 +1,13 @@
+{
+  "name": "spanish",
+  "words": [
+    "tiempo", "persona", "año", "camino", "día", "vida", "mano", "gobierno", "casa", "mundo",
+    "trabajo", "problema", "parte", "lugar", "empresa", "sistema", "grupo", "número", "noche", "ciudad",
+    "amor", "amigo", "agua", "fuerza", "luz", "palabra", "hombre", "mujer", "niño", "historia",
+    "punto", "forma", "efecto", "idea", "madre", "padre", "momento", "familia", "realidad", "verdad",
+    "sol", "luna", "mar", "tierra", "fuego", "viento", "cielo", "tiempo", "viaje", "camino",
+    "cambio", "futuro", "pasado", "presente", "mente", "alma", "cuerpo", "corazón", "pensamiento", "razón",
+    "esperanza", "paz", "alegría", "sueño", "éxito", "fuerza", "libertad", "justicia", "derecho", "deber",
+    "arte", "música", "libro", "ciencia", "naturaleza", "campo", "árbol", "flor", "camino", "destino"
+  ]
+}

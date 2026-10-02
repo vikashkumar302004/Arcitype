@@ -1,0 +1,11 @@
+{
+  "name": "german",
+  "words": [
+    "zeit", "mensch", "jahr", "tag", "welt", "leben", "hand", "stadt", "frau", "kind",
+    "grund", "haus", "wort", "auge", "land", "arbeit", "stelle", "kraft", "seite", "woche",
+    "fall", "geist", "frage", "nacht", "musik", "traum", "liebe", "freund", "wasser", "licht",
+    "sonne", "mond", "meer", "erde", "feuer", "wind", "himmel", "weg", "reise", "zukunft",
+    "vergangenheit", "gegenwart", "herz", "gedanke", "hoffnung", "frieden", "freiheit", "recht", "kunst", "buch",
+    "natur", "blume", "baum", "familie", "vater", "mutter", "bruder", "schwester", "schule", "wissen"
+  ]
+}
