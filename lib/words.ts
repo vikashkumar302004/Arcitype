@@ -65,7 +65,7 @@ function applyModifiers(
 }
 
 /**
- * Generate words from a pre-fetched language word pool (MonkeyType lists).
+ * Generate words from a pre-fetched language word pool.
  * Used for non-English languages and for English when a language pool is loaded.
  */
 export function generateWordsFromPool(

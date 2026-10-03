@@ -23,10 +23,15 @@ const fontMono = Geist_Mono({
 export const metadata: Metadata = {
   title: {
     default:
-      "Arcitype — Next-Gen Mechanical Typing Test & Performance Insights",
-    template: "%s | Arcitype",
+      "Arcitype Pro — Next-Gen Mechanical Speed Typing & Audio Experience",
+    template: "%s | Arcitype Pro",
   },
   description: siteConfig.description,
+  icons: {
+    icon: "/logo.png",
+    shortcut: "/logo.png",
+    apple: "/logo.png",
+  },
   keywords: [
     "typing test",
     "free typing test",
@@ -43,7 +48,7 @@ export const metadata: Metadata = {
     "mechanical keyboard sounds",
     "keyboard sound test",
     "typing sound",
-    "monkeytype alternative",
+    "Arcitype Pro",
     "Arcitype",
   ],
   authors: [{ name: siteConfig.creator, url: siteConfig.creatorUrl }],

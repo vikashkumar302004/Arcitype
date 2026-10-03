@@ -25,7 +25,7 @@ const VALID_TIME_OPTIONS: readonly TimeOption[] = [15, 30, 60, 120];
 const VALID_WORD_OPTIONS: readonly WordOption[] = [10, 25, 50, 100];
 const VALID_QUOTE_LENGTHS: readonly QuoteLength[] = ["short", "medium", "long"];
 const VALID_DIFFICULTIES: readonly Difficulty[] = ["easy", "hard"];
-const VALID_LANGUAGES = ["english", "hindi", "hinglish", "spanish", "french", "german"] as const;
+const VALID_LANGUAGES = ["english", "hinglish", "spanish", "french", "german", "italian", "portuguese", "dutch", "javascript", "python", "cpp"] as const;
 
 function isBrowser() {
   return typeof window !== "undefined";

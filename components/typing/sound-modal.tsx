@@ -93,7 +93,7 @@ export function SoundModal({ isOpen, onClose }: SoundModalProps) {
             </div>
           </div>
 
-          {/* Sound Profiles Grid (Monkeytype Style) */}
+          {/* Sound Profiles Grid */}
           <div className="mt-4 flex-1 overflow-y-auto pr-1">
             {filteredProfiles.length === 0 ? (
               <div className="py-8 text-center text-xs text-muted-foreground">

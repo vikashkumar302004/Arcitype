@@ -59,12 +59,14 @@ function AccountContent() {
   const [github, setGithub] = useState("");
   const [isEditing, setIsEditing] = useState(false);
 
+  // Profile state & feedback
+  const [profileSaved, setProfileSaved] = useState(false);
+
   // Friends state
   const [friendInput, setFriendInput] = useState("");
-  const [friendsList, setFriendsList] = useState([
-    { id: "1", name: "Alex_Speed", wpm: 124, accuracy: 98, streak: 12, isOnline: true },
-    { id: "2", name: "Sarah_Type", wpm: 108, accuracy: 99, streak: 5, isOnline: false },
-  ]);
+  const [friendsList, setFriendsList] = useState<
+    Array<{ id: string; name: string; wpm: number; accuracy: number; streak: number; isOnline: boolean }>
+  >([]);
 
   useEffect(() => {
     if (tabParam && ["stats", "friends", "public", "settings"].includes(tabParam)) {
@@ -74,6 +76,20 @@ function AccountContent() {
 
   useEffect(() => {
     setStats(getStoredUserStats());
+
+    const storedFriends = localStorage.getItem("arcitype_friends");
+    if (storedFriends) {
+      try {
+        setFriendsList(JSON.parse(storedFriends));
+      } catch {
+        /* ignore */
+      }
+    } else {
+      setFriendsList([
+        { id: "1", name: "Alex_Speed", wpm: 124, accuracy: 98, streak: 12, isOnline: true },
+        { id: "2", name: "Sarah_Type", wpm: 108, accuracy: 99, streak: 5, isOnline: false },
+      ]);
+    }
   }, []);
 
   useEffect(() => {
@@ -97,23 +113,31 @@ function AccountContent() {
     if (!editName) return;
     updateProfile({ username: editName, bio: editBio });
     setIsEditing(false);
+    setProfileSaved(true);
+    setTimeout(() => setProfileSaved(false), 2500);
   };
 
   const handleAddFriend = (e: React.FormEvent) => {
     e.preventDefault();
     if (!friendInput.trim()) return;
-    setFriendsList((prev) => [
-      ...prev,
-      {
-        id: String(Date.now()),
-        name: friendInput.trim(),
-        wpm: Math.floor(Math.random() * 40) + 80,
-        accuracy: 98,
-        streak: 1,
-        isOnline: true,
-      },
-    ]);
+    const newFriend = {
+      id: String(Date.now()),
+      name: friendInput.trim(),
+      wpm: Math.floor(Math.random() * 40) + 80,
+      accuracy: 98,
+      streak: 1,
+      isOnline: true,
+    };
+    const updated = [newFriend, ...friendsList];
+    setFriendsList(updated);
+    localStorage.setItem("arcitype_friends", JSON.stringify(updated));
     setFriendInput("");
+  };
+
+  const handleRemoveFriend = (id: string) => {
+    const updated = friendsList.filter((f) => f.id !== id);
+    setFriendsList(updated);
+    localStorage.setItem("arcitype_friends", JSON.stringify(updated));
   };
 
   // Prepare WPM progress chart data from history
@@ -179,7 +203,7 @@ function AccountContent() {
 
   return (
     <main className="mx-auto flex w-full max-w-5xl flex-col gap-6 px-4 py-6 md:px-8">
-      {/* Top Banner Profile Card — Matching Monkeytype Design */}
+      {/* Top Banner Profile Card */}
       <div className="relative flex w-full flex-col gap-6 rounded-3xl border border-border/80 bg-card/70 p-6 md:p-8 backdrop-blur-md shadow-xl">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
           {/* Left: Avatar + Name + Streak + Level */}
@@ -582,6 +606,15 @@ function AccountContent() {
                     >
                       Compare
                     </button>
+                    <button
+                      aria-label="Remove Friend"
+                      className="rounded-lg border border-destructive/30 bg-destructive/10 px-2 py-1 text-[11px] text-destructive hover:bg-destructive/20 transition-colors"
+                      onClick={() => handleRemoveFriend(friend.id)}
+                      title="Remove Friend"
+                      type="button"
+                    >
+                      <Trash size={14} />
+                    </button>
                   </div>
                 </div>
               ))}
@@ -727,13 +760,18 @@ function AccountContent() {
                 />
               </div>
 
-              <div className="pt-2">
+              <div className="flex items-center gap-3 pt-2">
                 <button
                   className="rounded-xl bg-primary px-5 py-2 text-xs font-bold text-primary-foreground transition-transform hover:scale-[1.02]"
                   type="submit"
                 >
                   Save Account Changes
                 </button>
+                {profileSaved && (
+                  <span className="flex items-center gap-1 text-xs font-bold text-emerald-400">
+                    <Check size={16} /> Saved!
+                  </span>
+                )}
               </div>
             </form>
           </div>

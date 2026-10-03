@@ -70,16 +70,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           year: "numeric",
         });
 
+        const existingStored = localStorage.getItem(AUTH_STORAGE_KEY);
+        let existingObj: Partial<UserProfile> = {};
+        if (existingStored) {
+          try {
+            existingObj = JSON.parse(existingStored);
+          } catch {
+            /* ignore */
+          }
+        }
+
         const updatedProfile: UserProfile = {
           uid: fbUser.uid,
-          username: fbUser.displayName || fbUser.email?.split("@")[0] || "SpeedTypist",
-          email: fbUser.email || "user@gmail.com",
-          avatarUrl: fbUser.photoURL || undefined,
-          joinedDate: formattedDate,
-          isPublic: true,
-          level: 1,
-          xp: 0,
-          bio: "Mechanical keyboard speed typist on Arcitype.",
+          username: existingObj.username || fbUser.displayName || fbUser.email?.split("@")[0] || "SpeedTypist",
+          email: fbUser.email || existingObj.email || "user@gmail.com",
+          avatarUrl: fbUser.photoURL || existingObj.avatarUrl || undefined,
+          joinedDate: existingObj.joinedDate || formattedDate,
+          isPublic: existingObj.isPublic ?? true,
+          level: existingObj.level || 1,
+          xp: existingObj.xp || 0,
+          bio: existingObj.bio || "Mechanical keyboard speed typist on Arcitype.",
         };
 
         setUser(updatedProfile);

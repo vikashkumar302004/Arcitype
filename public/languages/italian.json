@@ -1,0 +1,20 @@
+{
+  "name": "italian",
+  "words": [
+    "di", "a", "in", "con", "su", "per", "tra", "fra", "tempo", "vita",
+    "giorno", "uomo", "casa", "mondo", "anno", "storia", "lavoro", "parola", "mano", "occhio",
+    "citta", "paese", "strada", "notte", "luce", "anima", "cielo", "mare", "sole", "terra",
+    "amore", "cuore", "persona", "gente", "idea", "forza", "nome", "mente", "arte", "musica",
+    "libro", "fine", "inizio", "futuro", "presente", "sempre", "mai", "prima", "dopo", "bene",
+    "male", "grande", "piccolo", "nuovo", "bello", "alto", "basso", "forte", "facile", "difficile",
+    "veloce", "piano", "felice", "sicuro", "vero", "falso", "unico", "libero", "umano", "sociale",
+    "politico", "reale", "naturale", "aperto", "chiuso", "chiaro", "scuro", "giovane", "vecchio", "caldo",
+    "freddo", "dolce", "amaro", "lungo", "corto", "pronto", "buono", "santo", "giusto", "ricco",
+    "povero", "pieno", "vuoto", "stanco", "fermo", "calmo", "vivo", "morto", "contento", "triste",
+    "fiero", "solo", "insieme", "adesso", "subito", "oggi", "domani", "ieri", "ora", "dopo",
+    "dove", "quando", "come", "perche", "chi", "che", "quale", "quanto", "tutti", "nessuno",
+    "qualcosa", "niente", "tutto", "ogni", "altro", "stesso", "tale", "questo", "quello", "mio",
+    "tuo", "suo", "nostro", "vostro", "loro", "uno", "due", "tre", "quattro", "cinque",
+    "sei", "sette", "otto", "nove", "dieci"
+  ]
+}

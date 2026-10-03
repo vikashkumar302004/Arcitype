@@ -1,0 +1,13 @@
+{
+  "name": "javascript",
+  "words": [
+    "const", "let", "var", "function", "return", "async", "await", "import", "export", "default",
+    "from", "class", "extends", "constructor", "this", "super", "new", "try", "catch", "finally",
+    "throw", "if", "else", "switch", "case", "break", "continue", "for", "while", "do",
+    "typeof", "instanceof", "null", "undefined", "true", "false", "Promise", "Array", "Object", "String",
+    "Number", "Boolean", "Map", "Set", "JSON", "Math", "document", "window", "console", "log",
+    "fetch", "map", "filter", "reduce", "forEach", "find", "push", "pop", "shift", "unshift",
+    "slice", "splice", "length", "toString", "setTimeout", "setInterval", "useEffect", "useState", "useMemo", "useCallback",
+    "useRef", "props", "state", "component", "render", "JSX", "Element", "Event", "Handler", "Callback"
+  ]
+}

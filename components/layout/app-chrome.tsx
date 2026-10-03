@@ -191,20 +191,8 @@ function SiteHeader() {
               </span>
             </button>
 
-            {/* Shifted Audio, Settings & Race Arena */}
+            {/* Shifted Audio & Settings */}
             <div className="flex items-center gap-2">
-              {/* Race Arena Button */}
-              <motion.button
-                aria-label="Race Arena"
-                className="flex items-center gap-1.5 rounded-full border border-primary/40 bg-primary/15 px-3.5 py-1.5 text-xs font-bold text-primary transition-all hover:bg-primary/25 shadow-2xs"
-                onClick={() => setIsRaceModalOpen(true)}
-                type="button"
-                whileTap={{ scale: 0.96 }}
-              >
-                <Sword size={16} weight="duotone" />
-                <span>Race Arena</span>
-              </motion.button>
-
               {/* Audio toggle */}
               <motion.button
                 aria-label={soundEnabled ? "Mute audio" : "Unmute audio"}

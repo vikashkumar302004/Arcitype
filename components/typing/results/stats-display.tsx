@@ -54,7 +54,7 @@ export function DetailStat({
 
 import type { ResultStats } from "@/lib/types";
 
-export function MonkeytypeAnalysisBar({ stats }: { stats: ResultStats }) {
+export function ArcitypeAnalysisBar({ stats }: { stats: ResultStats }) {
   const {
     raw,
     consistency,

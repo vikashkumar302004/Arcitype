@@ -1,0 +1,11 @@
+{
+  "name": "cpp",
+  "words": [
+    "include", "iostream", "std", "cout", "cin", "endl", "vector", "string", "map", "set",
+    "pair", "struct", "class", "public", "private", "protected", "template", "typename", "void", "int",
+    "double", "float", "char", "bool", "auto", "const", "static", "return", "if", "else",
+    "for", "while", "do", "switch", "case", "break", "continue", "new", "delete", "nullptr",
+    "main", "namespace", "using", "override", "virtual", "constexpr", "sizeof", "push_back", "pop_back", "size",
+    "empty", "clear", "begin", "end", "algorithm", "sort", "find", "unique", "lower_bound", "upper_bound"
+  ]
+}

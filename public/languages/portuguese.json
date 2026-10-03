@@ -1,0 +1,18 @@
+{
+  "name": "portuguese",
+  "words": [
+    "de", "a", "o", "que", "e", "do", "da", "em", "um", "para",
+    "com", "nao", "uma", "os", "no", "se", "na", "por", "mais", "as",
+    "dos", "como", "mas", "ao", "ele", "das", "tem", "seu", "sua", "ou",
+    "quando", "muito", "nos", "ja", "eu", "tambem", "so", "pelo", "pela", "ate",
+    "isso", "ela", "entre", "depois", "sem", "mesmo", "aos", "ter", "seus", "quem",
+    "nas", "me", "esse", "eles", "voce", "essa", "num", "nem", "suas", "meu",
+    "minha", "numa", "pelos", "elas", "havia", "quais", "duas", "pelas", "qual", "tempo",
+    "vida", "dia", "homem", "casa", "mundo", "ano", "trabalho", "palavra", "mao", "olhos",
+    "cidade", "noite", "luz", "ceu", "mar", "sol", "terra", "amor", "coracao", "pessoa",
+    "gente", "ideia", "forca", "nome", "mente", "arte", "livro", "fim", "inicio", "futuro",
+    "presente", "sempre", "nunca", "bom", "novo", "grande", "pequeno", "alto", "baixo", "forte",
+    "facil", "dificil", "rapido", "devagar", "feliz", "seguro", "certo", "unico", "livre", "humano",
+    "aberto", "fechado", "claro", "escuro", "jovem", "velho", "quente", "frio"
+  ]
+}

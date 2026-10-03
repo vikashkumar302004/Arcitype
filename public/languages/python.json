@@ -1,0 +1,12 @@
+{
+  "name": "python",
+  "words": [
+    "def", "return", "import", "from", "as", "class", "self", "if", "elif", "else",
+    "while", "for", "in", "break", "continue", "try", "except", "finally", "raise", "with",
+    "lambda", "pass", "is", "not", "and", "or", "True", "False", "None", "print",
+    "len", "range", "enumerate", "zip", "list", "dict", "set", "tuple", "int", "str",
+    "float", "bool", "open", "read", "write", "close", "super", "__init__", "__str__", "__repr__",
+    "__len__", "append", "extend", "pop", "get", "keys", "values", "items", "split", "join",
+    "strip", "replace", "format", "async", "await", "type", "isinstance", "sum", "min", "max", "sorted"
+  ]
+}

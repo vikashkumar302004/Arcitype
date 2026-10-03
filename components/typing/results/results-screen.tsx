@@ -18,7 +18,7 @@ import {
   ResultsActionButton,
 } from "./results-actions";
 import { AIDiagnostics } from "./ai-diagnostics";
-import { KeyStat, MonkeytypeAnalysisBar } from "./stats-display";
+import { KeyStat, ArcitypeAnalysisBar } from "./stats-display";
 import { WpmChart } from "./wpm-chart";
 
 interface ResultsScreenProps {
@@ -263,13 +263,13 @@ export function ResultsScreen({
       {/* ── AI Performance Diagnostics ── */}
       <AIDiagnostics onPracticeWeakKeys={onPracticeWeakKeys} stats={stats} />
 
-      {/* ── Monkeytype Detailed Analysis ── */}
+      {/* ── Arcitype Detailed Performance Analysis ── */}
       <motion.div
         animate={{ opacity: 1, y: 0 }}
         initial={{ opacity: 0, y: 12 }}
         transition={{ delay: 0.75, duration: 0.4, ease }}
       >
-        <MonkeytypeAnalysisBar stats={stats} />
+        <ArcitypeAnalysisBar stats={stats} />
       </motion.div>
 
       {/* ── Actions — spring up individually ── */}

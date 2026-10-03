@@ -109,7 +109,7 @@ export function FontModal({ isOpen, onClose }: FontModalProps) {
             </div>
           </div>
 
-          {/* Fonts Grid (Monkeytype Style) */}
+          {/* Fonts Grid */}
           <div className="mt-4 flex-1 overflow-y-auto pr-1">
             {filteredFonts.length === 0 ? (
               <div className="py-8 text-center text-xs text-muted-foreground">

@@ -1,10 +1,15 @@
 export type LanguageId =
   | "english"
-  | "hindi"
   | "hinglish"
   | "spanish"
   | "french"
-  | "german";
+  | "german"
+  | "italian"
+  | "portuguese"
+  | "dutch"
+  | "javascript"
+  | "python"
+  | "cpp";
 
 export interface LanguageOption {
   id: LanguageId;
@@ -14,11 +19,16 @@ export interface LanguageOption {
 
 export const LANGUAGES: LanguageOption[] = [
   { id: "english", name: "english", nativeName: "English" },
-  { id: "hindi", name: "hindi", nativeName: "हिन्दी" },
   { id: "hinglish", name: "hinglish", nativeName: "Hinglish" },
   { id: "spanish", name: "spanish", nativeName: "Español" },
   { id: "french", name: "french", nativeName: "Français" },
   { id: "german", name: "german", nativeName: "Deutsch" },
+  { id: "italian", name: "italian", nativeName: "Italiano" },
+  { id: "portuguese", name: "portuguese", nativeName: "Português" },
+  { id: "dutch", name: "dutch", nativeName: "Nederlands" },
+  { id: "javascript", name: "javascript", nativeName: "JavaScript Code" },
+  { id: "python", name: "python", nativeName: "Python Code" },
+  { id: "cpp", name: "cpp", nativeName: "C++ Code" },
 ];
 
 const wordCache = new Map<string, string[]>();

@@ -1,0 +1,17 @@
+{
+  "name": "dutch",
+  "words": [
+    "de", "het", "een", "en", "van", "in", "is", "dat", "op", "te",
+    "met", "voor", "zijn", "er", "niet", "om", "ook", "als", "aan", "door",
+    "maar", "uit", "bij", "nog", "wel", "over", "geen", "heeft", "worden", "kan",
+    "ze", "mij", "of", "naar", "we", "al", "hoe", "wat", "meer", "tot",
+    "nu", "waar", "je", "dit", "hem", "veel", "haar", "hij", "mijn", "ons",
+    "uw", "wie", "mocht", "even", "gaan", "laten", "maken", "zien", "komen", "denken",
+    "wensen", "horen", "spreken", "tijd", "leven", "dag", "man", "huis", "wereld", "jaar",
+    "werk", "woord", "hand", "oog", "stad", "nacht", "licht", "hemel", "zee", "zon",
+    "aarde", "liefde", "hart", "mens", "idee", "kracht", "naam", "geest", "kunst", "boek",
+    "einde", "begin", "toekomst", "altijd", "nooit", "goed", "nieuw", "groot", "klein", "hoog",
+    "laag", "sterk", "makkelijk", "moeilijk", "snel", "gelukkig", "zeker", "waar", "uniek", "vrij",
+    "open", "dicht", "warm", "koud"
+  ]
+}
