@@ -69,6 +69,13 @@ function saveLocalRoom(room: RaceRoom) {
   if (typeof window !== "undefined") {
     try {
       localStorage.setItem(`arc-room-${room.roomId}`, JSON.stringify(room));
+
+      // Save in active rooms index map
+      const indexStr = localStorage.getItem("arc-rooms-index");
+      const index = indexStr ? JSON.parse(indexStr) : {};
+      index[room.roomId] = room;
+      localStorage.setItem("arc-rooms-index", JSON.stringify(index));
+
       if ("BroadcastChannel" in window) {
         const bc = new BroadcastChannel("arc_room_sync");
         bc.postMessage(room);
@@ -85,11 +92,77 @@ function getLocalRoom(roomId: string): RaceRoom | null {
     try {
       const data = localStorage.getItem(`arc-room-${roomId}`);
       if (data) return JSON.parse(data);
+
+      const indexStr = localStorage.getItem("arc-rooms-index");
+      if (indexStr) {
+        const index = JSON.parse(indexStr);
+        if (index[roomId]) return index[roomId];
+      }
     } catch (e) {
       /* ignore */
     }
   }
   return null;
+}
+
+// Global P2P Mesh responder across browser tabs
+if (typeof window !== "undefined" && "BroadcastChannel" in window) {
+  try {
+    const bcMesh = new BroadcastChannel("arc_p2p_mesh");
+    bcMesh.onmessage = (event) => {
+      if (event.data && event.data.type === "REQUEST_ROOM" && event.data.roomId) {
+        const room = getLocalRoom(event.data.roomId);
+        if (room) {
+          bcMesh.postMessage({ type: "PROVIDE_ROOM", room });
+        }
+      }
+    };
+  } catch (e) {
+    /* ignore */
+  }
+}
+
+function queryRoomOverBroadcast(roomId: string): Promise<RaceRoom | null> {
+  return new Promise((resolve) => {
+    if (typeof window === "undefined" || !("BroadcastChannel" in window)) {
+      resolve(null);
+      return;
+    }
+
+    try {
+      const bc = new BroadcastChannel("arc_p2p_mesh");
+      let resolved = false;
+
+      const timer = setTimeout(() => {
+        if (!resolved) {
+          resolved = true;
+          bc.close();
+          resolve(null);
+        }
+      }, 400);
+
+      bc.onmessage = (event) => {
+        if (
+          event.data &&
+          event.data.type === "PROVIDE_ROOM" &&
+          event.data.room &&
+          event.data.room.roomId === roomId
+        ) {
+          if (!resolved) {
+            resolved = true;
+            clearTimeout(timer);
+            bc.close();
+            saveLocalRoom(event.data.room);
+            resolve(event.data.room);
+          }
+        }
+      };
+
+      bc.postMessage({ type: "REQUEST_ROOM", roomId });
+    } catch {
+      resolve(null);
+    }
+  });
 }
 
 // 1. Create a new Multiplayer Room
@@ -173,65 +246,77 @@ export async function joinMultiplayerRoom(
   if (!cleanId) return null;
   const uid = user.uid || `anon_${Date.now()}`;
 
+  let room: RaceRoom | null = null;
+
+  // Step A: Check Firestore
   try {
     const roomRef = doc(db, "rooms", cleanId);
-    let snap = await getDoc(roomRef);
-
-    let room: RaceRoom | null = snap.exists() ? (snap.data() as RaceRoom) : getLocalRoom(cleanId);
-
-    if (!room) {
-      return null;
+    const snap = await getDoc(roomRef);
+    if (snap.exists()) {
+      room = snap.data() as RaceRoom;
     }
-
-    // Check if player already in room
-    const existingPlayerIndex = room.players.findIndex(
-      (p) => p.uid === uid || p.name === user.name
-    );
-
-    let updatedPlayers = [...room.players];
-    if (existingPlayerIndex >= 0) {
-      updatedPlayers[existingPlayerIndex] = {
-        ...updatedPlayers[existingPlayerIndex],
-        name: user.name,
-        avatarUrl: user.avatarUrl || updatedPlayers[existingPlayerIndex].avatarUrl,
-      };
-    } else {
-      if (room.players.length >= room.maxPlayers) {
-        throw new Error(`Room ${cleanId} is full! Maximum limit of ${room.maxPlayers} players reached.`);
-      }
-
-      const newPlayer: RacePlayer = {
-        uid,
-        name: user.name,
-        avatarUrl: user.avatarUrl,
-        isHost: false,
-        isReady: false,
-        finished: false,
-        wpm: 0,
-        rawWpm: 0,
-        accuracy: 0,
-        consistency: 0,
-      };
-      updatedPlayers.push(newPlayer);
-    }
-
-    const updatedRoom: RaceRoom = { ...room, players: updatedPlayers };
-
-    saveLocalRoom(updatedRoom);
-
-    try {
-      await updateDoc(roomRef, { players: updatedPlayers });
-    } catch (e) {
-      console.warn("Firestore updateDoc offline fallback:", e);
-    }
-
-    return updatedRoom;
-  } catch (err: any) {
-    console.error("Join room error:", err);
-    const local = getLocalRoom(cleanId);
-    if (local) return local;
-    throw err;
+  } catch (err) {
+    console.warn("Firestore getDoc notice:", err);
   }
+
+  // Step B: Check Local Storage index & keys
+  if (!room) {
+    room = getLocalRoom(cleanId);
+  }
+
+  // Step C: P2P Broadcast Mesh Ping/Pong across open tabs
+  if (!room && typeof window !== "undefined") {
+    room = await queryRoomOverBroadcast(cleanId);
+  }
+
+  if (!room) {
+    return null;
+  }
+
+  // Check if player already in room
+  const existingPlayerIndex = room.players.findIndex(
+    (p) => p.uid === uid || (user.name && p.name === user.name)
+  );
+
+  let updatedPlayers = [...room.players];
+  if (existingPlayerIndex >= 0) {
+    updatedPlayers[existingPlayerIndex] = {
+      ...updatedPlayers[existingPlayerIndex],
+      name: user.name,
+      avatarUrl: user.avatarUrl || updatedPlayers[existingPlayerIndex].avatarUrl,
+    };
+  } else {
+    if (room.players.length >= room.maxPlayers) {
+      throw new Error(`Room ${cleanId} is full! Maximum limit of ${room.maxPlayers} players reached.`);
+    }
+
+    const newPlayer: RacePlayer = {
+      uid,
+      name: user.name,
+      avatarUrl: user.avatarUrl,
+      isHost: false,
+      isReady: false,
+      finished: false,
+      wpm: 0,
+      rawWpm: 0,
+      accuracy: 0,
+      consistency: 0,
+    };
+    updatedPlayers.push(newPlayer);
+  }
+
+  const updatedRoom: RaceRoom = { ...room, players: updatedPlayers };
+
+  saveLocalRoom(updatedRoom);
+
+  try {
+    const roomRef = doc(db, "rooms", cleanId);
+    await updateDoc(roomRef, { players: updatedPlayers });
+  } catch (e) {
+    console.warn("Firestore updateDoc fallback:", e);
+  }
+
+  return updatedRoom;
 }
 
 // 3. Real-time subscription (BroadcastChannel + Firestore onSnapshot)
@@ -251,12 +336,16 @@ export function subscribeToRoom(
   // Cross-tab BroadcastChannel subscription
   let bc: BroadcastChannel | null = null;
   if (typeof window !== "undefined" && "BroadcastChannel" in window) {
-    bc = new BroadcastChannel("arc_room_sync");
-    bc.onmessage = (event) => {
-      if (event.data && event.data.roomId === cleanId) {
-        onUpdate(event.data as RaceRoom);
-      }
-    };
+    try {
+      bc = new BroadcastChannel("arc_room_sync");
+      bc.onmessage = (event) => {
+        if (event.data && event.data.roomId === cleanId) {
+          onUpdate(event.data as RaceRoom);
+        }
+      };
+    } catch {
+      /* ignore */
+    }
   }
 
   // Firestore subscription
@@ -287,8 +376,14 @@ export async function togglePlayerReadyState(
 ): Promise<void> {
   const cleanId = normalizeRoomCode(roomId);
   const roomRef = doc(db, "rooms", cleanId);
-  const snap = await getDoc(roomRef);
-  const room = snap.exists() ? (snap.data() as RaceRoom) : getLocalRoom(cleanId);
+  let room: RaceRoom | null = null;
+  try {
+    const snap = await getDoc(roomRef);
+    if (snap.exists()) room = snap.data() as RaceRoom;
+  } catch {
+    /* ignore */
+  }
+  if (!room) room = getLocalRoom(cleanId);
 
   if (room) {
     const updatedPlayers = room.players.map((p) =>
@@ -310,8 +405,14 @@ export async function togglePlayerReadyState(
 export async function startMultiplayerRace(roomId: string): Promise<void> {
   const cleanId = normalizeRoomCode(roomId);
   const roomRef = doc(db, "rooms", cleanId);
-  const snap = await getDoc(roomRef);
-  const room = snap.exists() ? (snap.data() as RaceRoom) : getLocalRoom(cleanId);
+  let room: RaceRoom | null = null;
+  try {
+    const snap = await getDoc(roomRef);
+    if (snap.exists()) room = snap.data() as RaceRoom;
+  } catch {
+    /* ignore */
+  }
+  if (!room) room = getLocalRoom(cleanId);
 
   if (room) {
     const updatedRoom: RaceRoom = {
@@ -336,8 +437,14 @@ export async function startMultiplayerRace(roomId: string): Promise<void> {
 export async function setRoomStatusRacing(roomId: string): Promise<void> {
   const cleanId = normalizeRoomCode(roomId);
   const roomRef = doc(db, "rooms", cleanId);
-  const snap = await getDoc(roomRef);
-  const room = snap.exists() ? (snap.data() as RaceRoom) : getLocalRoom(cleanId);
+  let room: RaceRoom | null = null;
+  try {
+    const snap = await getDoc(roomRef);
+    if (snap.exists()) room = snap.data() as RaceRoom;
+  } catch {
+    /* ignore */
+  }
+  if (!room) room = getLocalRoom(cleanId);
 
   if (room) {
     const updatedRoom: RaceRoom = { ...room, status: "racing" };
@@ -359,8 +466,14 @@ export async function finishPlayerRace(
 ): Promise<void> {
   const cleanId = normalizeRoomCode(roomId);
   const roomRef = doc(db, "rooms", cleanId);
-  const snap = await getDoc(roomRef);
-  const room = snap.exists() ? (snap.data() as RaceRoom) : getLocalRoom(cleanId);
+  let room: RaceRoom | null = null;
+  try {
+    const snap = await getDoc(roomRef);
+    if (snap.exists()) room = snap.data() as RaceRoom;
+  } catch {
+    /* ignore */
+  }
+  if (!room) room = getLocalRoom(cleanId);
 
   if (room) {
     const updatedPlayers = room.players.map((p) =>
