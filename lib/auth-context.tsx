@@ -18,6 +18,7 @@ import { auth, googleProvider } from "@/lib/firebase";
 export interface UserProfile {
   uid?: string;
   username: string;
+  profileId: string;
   email: string;
   joinedDate: string; // e.g. "01 Oct 2026"
   avatarUrl?: string;
@@ -54,6 +55,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       try {
         const parsed = JSON.parse(stored);
         if (parsed && parsed.username) {
+          if (!parsed.profileId) {
+            parsed.profileId = `@${parsed.username.toLowerCase().replace(/\s+/g, "")}#${(parsed.uid || "3020").slice(0, 4).toUpperCase()}`;
+          }
           setUser(parsed);
         }
       } catch {
@@ -80,9 +84,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           }
         }
 
+        const fallbackTag = `@${(fbUser.displayName || fbUser.email?.split("@")[0] || "typist").toLowerCase().replace(/\s+/g, "")}#${fbUser.uid.slice(0, 4).toUpperCase()}`;
+
         const updatedProfile: UserProfile = {
           uid: fbUser.uid,
           username: existingObj.username || fbUser.displayName || fbUser.email?.split("@")[0] || "SpeedTypist",
+          profileId: existingObj.profileId || fallbackTag,
           email: fbUser.email || existingObj.email || "user@gmail.com",
           avatarUrl: fbUser.photoURL || existingObj.avatarUrl || undefined,
           joinedDate: existingObj.joinedDate || formattedDate,
@@ -118,6 +125,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const fallbackUser: UserProfile = {
         uid: "demo_uid_123",
         username: mockName,
+        profileId: "@vikashkumar#DEMO",
         email: mockEmail,
         joinedDate: formattedDate,
         isPublic: true,

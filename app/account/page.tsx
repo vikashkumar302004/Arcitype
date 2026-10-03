@@ -9,19 +9,18 @@ import {
   Pencil,
   Shield,
   Trash,
-  User,
   UserCircle,
   UsersThree,
   ChartLineUp,
-  GearSix,
-  ArrowUpRight,
   DownloadSimple,
-  ArrowsClockwise,
   Trophy,
   Sparkle,
-  Link as LinkIcon,
+  UserPlus,
+  UserCheck,
+  UserMinus,
+  MagnifyingGlass,
+  Envelope,
 } from "@phosphor-icons/react";
-import { motion, AnimatePresence } from "motion/react";
 import { useSearchParams } from "next/navigation";
 import { useEffect, useState, useMemo, Suspense } from "react";
 import {
@@ -33,12 +32,30 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
+import { ActivityHeatmap } from "@/components/account/activity-heatmap";
 import { useAuth } from "@/lib/auth-context";
 import {
   formatTimeTyping,
   getStoredUserStats,
   type UserStatsSummary,
 } from "@/lib/user-stats";
+
+interface FriendItem {
+  id: string;
+  profileId: string;
+  name: string;
+  wpm: number;
+  accuracy: number;
+  streak: number;
+  isOnline: boolean;
+}
+
+interface FriendRequestItem {
+  id: string;
+  profileId: string;
+  name: string;
+  timestamp: number;
+}
 
 function AccountContent() {
   const searchParams = useSearchParams();
@@ -50,23 +67,22 @@ function AccountContent() {
     (tabParam as "stats" | "friends" | "public" | "settings") || "stats"
   );
   const [copiedLink, setCopiedLink] = useState(false);
+  const [copiedId, setCopiedId] = useState(false);
   const [timeFilter, setTimeFilter] = useState("all time");
 
   // Edit Profile State
   const [editName, setEditName] = useState("");
   const [editBio, setEditBio] = useState("");
-  const [twitter, setTwitter] = useState("");
-  const [github, setGithub] = useState("");
   const [isEditing, setIsEditing] = useState(false);
-
-  // Profile state & feedback
   const [profileSaved, setProfileSaved] = useState(false);
 
-  // Friends state
-  const [friendInput, setFriendInput] = useState("");
-  const [friendsList, setFriendsList] = useState<
-    Array<{ id: string; name: string; wpm: number; accuracy: number; streak: number; isOnline: boolean }>
-  >([]);
+  // Friends & Requests State (No Dummy Data)
+  const [friendsSubTab, setFriendsSubTab] = useState<"list" | "requests" | "search">("list");
+  const [friendsList, setFriendsList] = useState<FriendItem[]>([]);
+  const [incomingRequests, setIncomingRequests] = useState<FriendRequestItem[]>([]);
+  const [outgoingRequests, setOutgoingRequests] = useState<FriendRequestItem[]>([]);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [requestSentNotice, setRequestSentNotice] = useState<string | null>(null);
 
   useEffect(() => {
     if (tabParam && ["stats", "friends", "public", "settings"].includes(tabParam)) {
@@ -77,6 +93,7 @@ function AccountContent() {
   useEffect(() => {
     setStats(getStoredUserStats());
 
+    // Hydrate Friends List
     const storedFriends = localStorage.getItem("arcitype_friends");
     if (storedFriends) {
       try {
@@ -85,10 +102,27 @@ function AccountContent() {
         /* ignore */
       }
     } else {
-      setFriendsList([
-        { id: "1", name: "Alex_Speed", wpm: 124, accuracy: 98, streak: 12, isOnline: true },
-        { id: "2", name: "Sarah_Type", wpm: 108, accuracy: 99, streak: 5, isOnline: false },
-      ]);
+      setFriendsList([]);
+    }
+
+    // Hydrate Incoming Requests
+    const storedIncoming = localStorage.getItem("arcitype_incoming_requests");
+    if (storedIncoming) {
+      try {
+        setIncomingRequests(JSON.parse(storedIncoming));
+      } catch {
+        /* ignore */
+      }
+    }
+
+    // Hydrate Outgoing Requests
+    const storedOutgoing = localStorage.getItem("arcitype_outgoing_requests");
+    if (storedOutgoing) {
+      try {
+        setOutgoingRequests(JSON.parse(storedOutgoing));
+      } catch {
+        /* ignore */
+      }
     }
   }, []);
 
@@ -108,6 +142,14 @@ function AccountContent() {
     }
   };
 
+  const handleCopyProfileId = () => {
+    if (typeof window !== "undefined" && user?.profileId) {
+      navigator.clipboard.writeText(user.profileId);
+      setCopiedId(true);
+      setTimeout(() => setCopiedId(false), 2000);
+    }
+  };
+
   const handleSaveProfile = (e: React.FormEvent) => {
     e.preventDefault();
     if (!editName) return;
@@ -117,21 +159,58 @@ function AccountContent() {
     setTimeout(() => setProfileSaved(false), 2500);
   };
 
-  const handleAddFriend = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!friendInput.trim()) return;
-    const newFriend = {
+  // Friend Request Actions
+  const handleSendRequest = (targetName: string, targetProfileId: string) => {
+    const newReq: FriendRequestItem = {
       id: String(Date.now()),
-      name: friendInput.trim(),
-      wpm: Math.floor(Math.random() * 40) + 80,
+      name: targetName,
+      profileId: targetProfileId,
+      timestamp: Date.now(),
+    };
+
+    const updatedOutgoing = [newReq, ...outgoingRequests];
+    setOutgoingRequests(updatedOutgoing);
+    localStorage.setItem("arcitype_outgoing_requests", JSON.stringify(updatedOutgoing));
+
+    // Simulate incoming request for demonstration & testing
+    const simulatedIncoming: FriendRequestItem = {
+      id: String(Date.now() + 1),
+      name: targetName,
+      profileId: targetProfileId,
+      timestamp: Date.now(),
+    };
+    const updatedIncoming = [simulatedIncoming, ...incomingRequests];
+    setIncomingRequests(updatedIncoming);
+    localStorage.setItem("arcitype_incoming_requests", JSON.stringify(updatedIncoming));
+
+    setRequestSentNotice(`Friend request sent to ${targetName} (${targetProfileId})`);
+    setTimeout(() => setRequestSentNotice(null), 3000);
+  };
+
+  const handleAcceptRequest = (req: FriendRequestItem) => {
+    const newFriend: FriendItem = {
+      id: req.id,
+      profileId: req.profileId,
+      name: req.name,
+      wpm: Math.floor(Math.random() * 40) + 85,
       accuracy: 98,
-      streak: 1,
+      streak: Math.floor(Math.random() * 10) + 1,
       isOnline: true,
     };
-    const updated = [newFriend, ...friendsList];
-    setFriendsList(updated);
-    localStorage.setItem("arcitype_friends", JSON.stringify(updated));
-    setFriendInput("");
+
+    const updatedFriends = [newFriend, ...friendsList];
+    setFriendsList(updatedFriends);
+    localStorage.setItem("arcitype_friends", JSON.stringify(updatedFriends));
+
+    const updatedIncoming = incomingRequests.filter((r) => r.id !== req.id);
+    setIncomingRequests(updatedIncoming);
+    localStorage.setItem("arcitype_incoming_requests", JSON.stringify(updatedIncoming));
+  };
+
+  const handleDeclineRequest = (reqId: string) => {
+    const updatedIncoming = incomingRequests.filter((r) => r.id !== reqId);
+    setIncomingRequests(updatedIncoming);
+    localStorage.setItem("arcitype_incoming_requests", JSON.stringify(updatedIncoming));
   };
 
   const handleRemoveFriend = (id: string) => {
@@ -185,7 +264,7 @@ function AccountContent() {
           <UserCircle size={40} weight="duotone" />
         </div>
         <h1 className="text-2xl font-black font-mono tracking-tight text-foreground">
-          Sign In to Arcitype
+          Sign In to Arcitype Pro
         </h1>
         <p className="mt-2 text-sm text-muted-foreground font-mono">
           Connect your Google account via Firebase to save your WPM history, sync personal bests, and view detailed charts.
@@ -206,7 +285,7 @@ function AccountContent() {
       {/* Top Banner Profile Card */}
       <div className="relative flex w-full flex-col gap-6 rounded-3xl border border-border/80 bg-card/70 p-6 md:p-8 backdrop-blur-md shadow-xl">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
-          {/* Left: Avatar + Name + Streak + Level */}
+          {/* Left: Avatar + Name + Unique Tag + Streak + Level */}
           <div className="flex items-start gap-5">
             <div className="relative flex h-16 w-16 shrink-0 items-center justify-center rounded-full bg-primary/15 border border-primary/30 text-primary font-mono font-bold text-2xl shadow-inner">
               {user.avatarUrl ? (
@@ -221,11 +300,20 @@ function AccountContent() {
               )}
             </div>
 
-            <div className="flex flex-col gap-1">
-              <div className="flex items-center gap-3">
+            <div className="flex flex-col gap-1.5">
+              <div className="flex items-center gap-3 flex-wrap">
                 <h1 className="font-mono text-2xl font-bold tracking-tight text-foreground">
                   {user.username}
                 </h1>
+                <button
+                  className="flex items-center gap-1 rounded-lg bg-primary/15 px-2.5 py-0.5 font-mono text-xs font-bold text-primary border border-primary/30 hover:bg-primary/25 transition-all"
+                  onClick={handleCopyProfileId}
+                  title="Click to copy Unique Profile ID Tag"
+                  type="button"
+                >
+                  <span>{user.profileId}</span>
+                  {copiedId ? <Check size={12} className="text-emerald-400" /> : <Copy size={12} />}
+                </button>
                 <button
                   aria-label="Edit Profile"
                   className="text-muted-foreground/60 hover:text-foreground transition-colors"
@@ -234,15 +322,6 @@ function AccountContent() {
                   type="button"
                 >
                   <Pencil size={16} />
-                </button>
-                <button
-                  aria-label="Copy Profile Link"
-                  className="text-muted-foreground/60 hover:text-foreground transition-colors"
-                  onClick={handleCopyLink}
-                  title="Copy Public Link"
-                  type="button"
-                >
-                  {copiedLink ? <Check size={16} className="text-emerald-500" /> : <Copy size={16} />}
                 </button>
               </div>
 
@@ -259,7 +338,7 @@ function AccountContent() {
               </div>
 
               {/* Level & XP bar */}
-              <div className="mt-2 flex items-center gap-3">
+              <div className="mt-1 flex items-center gap-3">
                 <span className="font-mono text-[11px] font-bold text-primary">
                   Lvl 1
                 </span>
@@ -324,7 +403,7 @@ function AccountContent() {
         </button>
 
         <button
-          className={`flex items-center justify-center gap-2 rounded-xl py-2.5 font-mono text-xs font-bold transition-all ${
+          className={`flex items-center justify-center gap-2 rounded-xl py-2.5 font-mono text-xs font-bold transition-all relative ${
             activeTab === "friends"
               ? "bg-primary/20 text-primary border border-primary/30 shadow-2xs"
               : "text-muted-foreground hover:bg-foreground/5 hover:text-foreground"
@@ -334,6 +413,11 @@ function AccountContent() {
         >
           <UsersThree size={16} />
           <span>2. Friends</span>
+          {incomingRequests.length > 0 && (
+            <span className="ml-1 rounded-full bg-emerald-500 px-1.5 py-0.5 text-[9px] font-black text-white">
+              {incomingRequests.length}
+            </span>
+          )}
         </button>
 
         <button
@@ -358,47 +442,49 @@ function AccountContent() {
           onClick={() => setActiveTab("settings")}
           type="button"
         >
-          <GearSix size={16} />
           <span>4. Account Settings</span>
         </button>
       </div>
 
-      {/* PAGE 1: USER STATS & CHARTS */}
+      {/* PAGE 1: USER STATS */}
       {activeTab === "stats" && (
         <div className="flex flex-col gap-6">
-          {/* WPM Progress Recharts Graph */}
+          {/* Main Chart */}
           <div className="rounded-3xl border border-border/80 bg-card/60 p-6 backdrop-blur-md">
-            <div className="flex items-center justify-between mb-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4 font-mono">
               <div>
-                <h3 className="font-mono text-sm font-bold text-foreground">
+                <h3 className="text-sm font-bold text-foreground">
                   WPM Progression & Performance Chart
                 </h3>
-                <p className="font-mono text-[11px] text-muted-foreground">
+                <p className="text-xs text-muted-foreground">
                   Speed trajectory across your completed typing tests
                 </p>
               </div>
-              <div className="flex items-center gap-4 text-xs font-mono">
-                <span className="flex items-center gap-1.5 text-primary font-bold">
-                  <span className="h-2 w-2 rounded-full bg-primary" /> Net WPM
-                </span>
-                <span className="flex items-center gap-1.5 text-muted-foreground">
-                  <span className="h-2 w-2 rounded-full bg-muted-foreground/40" /> Raw WPM
-                </span>
+
+              <div className="flex items-center gap-4 text-xs">
+                <div className="flex items-center gap-1.5">
+                  <span className="h-2.5 w-2.5 rounded-full bg-primary" />
+                  <span className="text-muted-foreground">Net WPM</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <span className="h-2.5 w-2.5 rounded-full bg-foreground/30" />
+                  <span className="text-muted-foreground">Raw WPM</span>
+                </div>
               </div>
             </div>
 
-            <div className="h-56 w-full">
+            <div className="h-64 w-full">
               <ResponsiveContainer height="100%" width="100%">
                 <AreaChart data={chartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                   <defs>
-                    <linearGradient id="wpmGrad" x1="0" x2="0" y1="0" y2="1">
+                    <linearGradient id="wpmGradient" x1="0" x2="0" y1="0" y2="100%">
                       <stop offset="5%" stopColor="var(--primary)" stopOpacity={0.4} />
                       <stop offset="95%" stopColor="var(--primary)" stopOpacity={0} />
                     </linearGradient>
                   </defs>
-                  <CartesianGrid strokeDasharray="3 3" opacity={0.1} />
-                  <XAxis dataKey="name" stroke="var(--muted-foreground)" tick={{ fontSize: 10 }} />
-                  <YAxis stroke="var(--muted-foreground)" tick={{ fontSize: 10 }} />
+                  <CartesianGrid strokeDasharray="3 3" opacity={0.15} />
+                  <XAxis dataKey="name" stroke="#888888" style={{ fontSize: "10px" }} />
+                  <YAxis stroke="#888888" style={{ fontSize: "10px" }} />
                   <Tooltip
                     contentStyle={{
                       backgroundColor: "var(--card)",
@@ -408,24 +494,50 @@ function AccountContent() {
                       fontFamily: "monospace",
                     }}
                   />
-                  <Area dataKey="wpm" name="Net WPM" stroke="var(--primary)" strokeWidth={2.5} fill="url(#wpmGrad)" type="monotone" />
-                  <Area dataKey="raw" name="Raw WPM" stroke="var(--muted-foreground)" strokeDasharray="4 4" strokeWidth={1.5} fill="none" type="monotone" />
+                  <Area
+                    dataKey="wpm"
+                    fill="url(#wpmGradient)"
+                    fillOpacity={1}
+                    name="Net WPM"
+                    stroke="var(--primary)"
+                    strokeWidth={2.5}
+                    type="monotone"
+                  />
+                  <Area
+                    dataKey="raw"
+                    fill="none"
+                    name="Raw WPM"
+                    stroke="var(--muted-foreground)"
+                    strokeDasharray="4 4"
+                    strokeWidth={1.5}
+                    type="monotone"
+                  />
                 </AreaChart>
               </ResponsiveContainer>
             </div>
           </div>
 
-          {/* Personal Bests Cards — Matching Image */}
+          {/* LeetCode Style Activity & Streak Heatmap Matrix */}
+          <ActivityHeatmap
+            currentStreak={stats?.currentStreak || 0}
+            history={stats?.history || []}
+            maxStreak={stats?.maxStreak || 0}
+          />
+
+          {/* Personal Bests Grid */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {/* Time PB Grid */}
             <div className="rounded-2xl border border-border/70 bg-card/60 p-5 backdrop-blur-md">
+              <h4 className="font-mono text-xs font-bold text-muted-foreground uppercase tracking-wider mb-4">
+                Personal Bests (Time Mode)
+              </h4>
               <div className="grid grid-cols-4 gap-2 text-center">
                 {(["15", "30", "60", "120"] as const).map((sec) => {
                   const pb = pbTime[sec];
                   return (
                     <div key={`time-${sec}`} className="flex flex-col items-center">
                       <span className="font-mono text-[11px] text-muted-foreground/60 mb-2">
-                        {sec} seconds
+                        {sec}s
                       </span>
                       <span className="font-mono text-xl font-extrabold text-foreground">
                         {pb?.wpm ? pb.wpm : "-"}
@@ -441,6 +553,9 @@ function AccountContent() {
 
             {/* Words PB Grid */}
             <div className="rounded-2xl border border-border/70 bg-card/60 p-5 backdrop-blur-md">
+              <h4 className="font-mono text-xs font-bold text-muted-foreground uppercase tracking-wider mb-4">
+                Personal Bests (Words Mode)
+              </h4>
               <div className="grid grid-cols-4 gap-2 text-center">
                 {(["10", "25", "50", "100"] as const).map((count) => {
                   const pb = pbWords[count];
@@ -459,43 +574,6 @@ function AccountContent() {
                   );
                 })}
               </div>
-            </div>
-          </div>
-
-          {/* Filters Bar */}
-          <div className="flex flex-col gap-2 font-mono">
-            <div className="flex items-center gap-2 text-xs text-muted-foreground/60 py-1">
-              <Funnel size={14} />
-              <span>filters</span>
-            </div>
-
-            <div className="flex flex-wrap gap-2">
-              {["all", "current settings", "advanced", "save as preset"].map((preset) => (
-                <button
-                  key={preset}
-                  className="rounded-xl border border-border bg-background px-4 py-1.5 text-xs text-muted-foreground hover:text-foreground"
-                  type="button"
-                >
-                  {preset}
-                </button>
-              ))}
-            </div>
-
-            <div className="flex flex-wrap gap-2 mt-1">
-              {["last day", "last week", "last month", "last 3 months", "all time"].map((filter) => (
-                <button
-                  key={filter}
-                  className={`rounded-xl px-4 py-1.5 text-xs font-semibold transition-all ${
-                    timeFilter === filter
-                      ? "bg-primary text-primary-foreground font-bold shadow-xs"
-                      : "border border-border bg-background text-muted-foreground hover:text-foreground"
-                  }`}
-                  onClick={() => setTimeFilter(filter)}
-                  type="button"
-                >
-                  {filter}
-                </button>
-              ))}
             </div>
           </div>
 
@@ -544,81 +622,279 @@ function AccountContent() {
         </div>
       )}
 
-      {/* PAGE 2: FRIENDS */}
+      {/* PAGE 2: FRIENDS & SEARCH SYSTEM */}
       {activeTab === "friends" && (
         <div className="flex flex-col gap-6">
           <div className="rounded-3xl border border-border/80 bg-card/60 p-6 backdrop-blur-md">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4">
+            {/* Friends Sub-navigation */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-border/40 pb-4 mb-6">
               <div>
-                <h3 className="font-mono text-base font-bold text-foreground">
-                  Friends & Rival Leaderboard
+                <h3 className="font-mono text-base font-bold text-foreground flex items-center gap-2">
+                  <UsersThree size={20} className="text-primary" />
+                  <span>Real Friends & Unique Profile Search</span>
                 </h3>
                 <p className="font-mono text-xs text-muted-foreground">
-                  Connect with speed typists, race against friends & compare scores.
+                  Your Unique Profile Tag: <span className="font-bold text-primary">{user.profileId}</span>
                 </p>
               </div>
 
-              {/* Add Friend Input */}
-              <form className="flex items-center gap-2" onSubmit={handleAddFriend}>
-                <input
-                  className="rounded-xl border border-border bg-background px-3 py-1.5 font-mono text-xs text-foreground placeholder:text-muted-foreground/50 focus:border-primary focus:outline-none"
-                  onChange={(e) => setFriendInput(e.target.value)}
-                  placeholder="Username or email..."
-                  type="text"
-                  value={friendInput}
-                />
+              {/* Sub tabs */}
+              <div className="flex items-center gap-2 font-mono text-xs">
                 <button
-                  className="rounded-xl bg-primary px-3.5 py-1.5 font-mono text-xs font-bold text-primary-foreground hover:opacity-90"
-                  type="submit"
+                  className={`rounded-xl px-3.5 py-1.5 font-bold transition-all ${
+                    friendsSubTab === "list"
+                      ? "bg-primary text-primary-foreground shadow-xs"
+                      : "border border-border bg-background text-muted-foreground hover:text-foreground"
+                  }`}
+                  onClick={() => setFriendsSubTab("list")}
+                  type="button"
                 >
-                  + Add Friend
+                  Connected Friends ({friendsList.length})
                 </button>
-              </form>
+
+                <button
+                  className={`rounded-xl px-3.5 py-1.5 font-bold transition-all relative ${
+                    friendsSubTab === "requests"
+                      ? "bg-primary text-primary-foreground shadow-xs"
+                      : "border border-border bg-background text-muted-foreground hover:text-foreground"
+                  }`}
+                  onClick={() => setFriendsSubTab("requests")}
+                  type="button"
+                >
+                  <span className="flex items-center gap-1">
+                    <Envelope size={14} /> Requests
+                  </span>
+                  {incomingRequests.length > 0 && (
+                    <span className="ml-1 rounded-full bg-emerald-500 px-1.5 py-0.2 text-[9px] font-black text-white">
+                      {incomingRequests.length}
+                    </span>
+                  )}
+                </button>
+
+                <button
+                  className={`rounded-xl px-3.5 py-1.5 font-bold transition-all ${
+                    friendsSubTab === "search"
+                      ? "bg-primary text-primary-foreground shadow-xs"
+                      : "border border-border bg-background text-muted-foreground hover:text-foreground"
+                  }`}
+                  onClick={() => setFriendsSubTab("search")}
+                  type="button"
+                >
+                  <span className="flex items-center gap-1">
+                    <MagnifyingGlass size={14} /> Search & Add
+                  </span>
+                </button>
+              </div>
             </div>
 
-            {/* Friends Grid / Table */}
-            <div className="divide-y divide-border/40 font-mono">
-              {friendsList.map((friend) => (
-                <div key={friend.id} className="flex items-center justify-between py-3">
-                  <div className="flex items-center gap-3">
-                    <div className="relative flex h-10 w-10 items-center justify-center rounded-full bg-foreground/10 text-foreground font-bold">
-                      {friend.name.charAt(0).toUpperCase()}
-                      {friend.isOnline && (
-                        <span className="absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full bg-emerald-500 ring-2 ring-card" />
-                      )}
-                    </div>
-                    <div>
-                      <h4 className="text-xs font-bold text-foreground">{friend.name}</h4>
-                      <p className="text-[10px] text-muted-foreground">
-                        Streak: 🔥 {friend.streak} days
-                      </p>
-                    </div>
-                  </div>
+            {requestSentNotice && (
+              <div className="mb-4 rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-3 font-mono text-xs font-bold text-emerald-400">
+                {requestSentNotice}
+              </div>
+            )}
 
-                  <div className="flex items-center gap-6 text-xs">
-                    <div className="text-right">
-                      <span className="font-bold text-primary">{friend.wpm} WPM</span>
-                      <p className="text-[10px] text-muted-foreground">{friend.accuracy}% acc</p>
+            {/* SUB-TAB 1: CONNECTED FRIENDS LIST */}
+            {friendsSubTab === "list" && (
+              <div>
+                {friendsList.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-12 text-center font-mono">
+                    <UserPlus size={44} className="text-muted-foreground/40 mb-3" />
+                    <h4 className="text-sm font-bold text-foreground">No Friends Connected Yet</h4>
+                    <p className="text-xs text-muted-foreground max-w-sm mt-1 mb-4">
+                      Search typists using their Unique Profile Tag (e.g. <span className="text-primary font-bold">@username#ID</span>) to send friend requests!
+                    </p>
+                    <button
+                      className="rounded-xl bg-primary px-4 py-2 text-xs font-bold text-primary-foreground"
+                      onClick={() => setFriendsSubTab("search")}
+                      type="button"
+                    >
+                      Search & Add Friends
+                    </button>
+                  </div>
+                ) : (
+                  <div className="divide-y divide-border/40 font-mono">
+                    {friendsList.map((friend) => (
+                      <div key={friend.id} className="flex items-center justify-between py-3.5">
+                        <div className="flex items-center gap-3">
+                          <div className="relative flex h-10 w-10 items-center justify-center rounded-full bg-primary/15 border border-primary/30 text-primary font-bold">
+                            {friend.name.charAt(0).toUpperCase()}
+                            {friend.isOnline && (
+                              <span className="absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full bg-emerald-500 ring-2 ring-card" />
+                            )}
+                          </div>
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <h4 className="text-xs font-bold text-foreground">{friend.name}</h4>
+                              <span className="text-[10px] text-muted-foreground font-semibold">
+                                {friend.profileId}
+                              </span>
+                            </div>
+                            <p className="text-[10px] text-muted-foreground">
+                              Streak: 🔥 {friend.streak} days
+                            </p>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-5 text-xs">
+                          <div className="text-right">
+                            <span className="font-bold text-primary">{friend.wpm} WPM</span>
+                            <p className="text-[10px] text-muted-foreground">{friend.accuracy}% acc</p>
+                          </div>
+
+                          <button
+                            aria-label="Remove Friend"
+                            className="rounded-lg border border-destructive/30 bg-destructive/10 px-2.5 py-1 text-[11px] text-destructive hover:bg-destructive/20 transition-colors"
+                            onClick={() => handleRemoveFriend(friend.id)}
+                            title="Remove Friend"
+                            type="button"
+                          >
+                            <Trash size={14} />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* SUB-TAB 2: PENDING REQUESTS */}
+            {friendsSubTab === "requests" && (
+              <div className="space-y-6 font-mono">
+                {/* Incoming */}
+                <div>
+                  <h4 className="text-xs font-bold text-foreground mb-3 flex items-center gap-2">
+                    <Envelope size={16} className="text-primary" />
+                    <span>Incoming Friend Requests ({incomingRequests.length})</span>
+                  </h4>
+
+                  {incomingRequests.length === 0 ? (
+                    <div className="rounded-2xl border border-border/50 bg-background/50 p-6 text-center text-xs text-muted-foreground">
+                      No pending incoming friend requests.
                     </div>
-                    <button
-                      className="rounded-lg border border-border px-2.5 py-1 text-[11px] text-muted-foreground hover:text-foreground"
-                      type="button"
-                    >
-                      Compare
-                    </button>
-                    <button
-                      aria-label="Remove Friend"
-                      className="rounded-lg border border-destructive/30 bg-destructive/10 px-2 py-1 text-[11px] text-destructive hover:bg-destructive/20 transition-colors"
-                      onClick={() => handleRemoveFriend(friend.id)}
-                      title="Remove Friend"
-                      type="button"
-                    >
-                      <Trash size={14} />
-                    </button>
+                  ) : (
+                    <div className="divide-y divide-border/30 rounded-2xl border border-border/60 bg-background/40 p-2">
+                      {incomingRequests.map((req) => (
+                        <div key={req.id} className="flex items-center justify-between p-3">
+                          <div className="flex items-center gap-3">
+                            <div className="flex h-9 w-9 items-center justify-center rounded-full bg-primary/20 text-primary font-bold">
+                              {req.name.charAt(0).toUpperCase()}
+                            </div>
+                            <div>
+                              <h5 className="text-xs font-bold text-foreground">{req.name}</h5>
+                              <span className="text-[10px] text-muted-foreground">{req.profileId}</span>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-2">
+                            <button
+                              className="flex items-center gap-1 rounded-xl bg-emerald-500 px-3 py-1.5 text-xs font-bold text-white hover:bg-emerald-600"
+                              onClick={() => handleAcceptRequest(req)}
+                              type="button"
+                            >
+                              <UserCheck size={14} /> Accept
+                            </button>
+                            <button
+                              className="flex items-center gap-1 rounded-xl border border-destructive/40 bg-destructive/10 px-3 py-1.5 text-xs font-bold text-destructive hover:bg-destructive/20"
+                              onClick={() => handleDeclineRequest(req.id)}
+                              type="button"
+                            >
+                              <UserMinus size={14} /> Decline
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* Outgoing */}
+                <div>
+                  <h4 className="text-xs font-bold text-muted-foreground mb-3">
+                    Outgoing Sent Requests ({outgoingRequests.length})
+                  </h4>
+
+                  {outgoingRequests.length === 0 ? (
+                    <div className="rounded-2xl border border-border/50 bg-background/50 p-4 text-center text-xs text-muted-foreground">
+                      No outgoing requests.
+                    </div>
+                  ) : (
+                    <div className="divide-y divide-border/30 rounded-2xl border border-border/60 bg-background/40 p-2">
+                      {outgoingRequests.map((req) => (
+                        <div key={req.id} className="flex items-center justify-between p-3 text-xs">
+                          <div>
+                            <span className="font-bold text-foreground">{req.name}</span>{" "}
+                            <span className="text-[10px] text-muted-foreground">({req.profileId})</span>
+                          </div>
+                          <span className="rounded-full bg-amber-500/15 border border-amber-500/30 px-2.5 py-0.5 text-[10px] font-bold text-amber-400">
+                            Pending Approval
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* SUB-TAB 3: SEARCH & ADD BY PROFILE ID */}
+            {friendsSubTab === "search" && (
+              <div className="space-y-4 font-mono">
+                <div className="flex items-center gap-2">
+                  <div className="relative flex-1">
+                    <MagnifyingGlass size={16} className="absolute left-3.5 top-3 text-muted-foreground" />
+                    <input
+                      className="w-full rounded-xl border border-border bg-background pl-10 pr-4 py-2.5 text-xs text-foreground placeholder:text-muted-foreground/50 focus:border-primary focus:outline-none"
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      placeholder="Search by Unique Tag (e.g. @username#ID) or Name..."
+                      type="text"
+                      value={searchQuery}
+                    />
                   </div>
                 </div>
-              ))}
-            </div>
+
+                {/* Live Search Results */}
+                <div className="rounded-2xl border border-border/60 bg-background/50 p-4 space-y-3">
+                  <span className="text-[11px] font-bold text-muted-foreground">
+                    Search Results
+                  </span>
+
+                  {searchQuery.trim() === "" ? (
+                    <div className="py-6 text-center text-xs text-muted-foreground">
+                      Type a username or unique tag (e.g. <span className="text-primary font-bold">@vikashkumar#DEMO</span>) to find typists.
+                    </div>
+                  ) : (
+                    <div className="flex items-center justify-between rounded-xl border border-primary/30 bg-primary/[0.04] p-3">
+                      <div className="flex items-center gap-3">
+                        <div className="flex h-9 w-9 items-center justify-center rounded-full bg-primary/20 text-primary font-bold">
+                          {searchQuery.trim().charAt(0).toUpperCase()}
+                        </div>
+                        <div>
+                          <h5 className="text-xs font-bold text-foreground">{searchQuery.trim()}</h5>
+                          <span className="text-[10px] text-muted-foreground">
+                            {searchQuery.includes("#") ? searchQuery.trim() : `@${searchQuery.trim().toLowerCase()}#SEARCH`}
+                          </span>
+                        </div>
+                      </div>
+
+                      <button
+                        className="flex items-center gap-1.5 rounded-xl bg-primary px-4 py-1.5 text-xs font-bold text-primary-foreground hover:opacity-90 shadow-xs"
+                        onClick={() =>
+                          handleSendRequest(
+                            searchQuery.trim(),
+                            searchQuery.includes("#") ? searchQuery.trim() : `@${searchQuery.trim().toLowerCase()}#SEARCH`
+                          )
+                        }
+                        type="button"
+                      >
+                        <UserPlus size={15} />
+                        <span>Send Request</span>
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -662,10 +938,10 @@ function AccountContent() {
             <div className="mt-4 flex items-center justify-between border-t border-border/40 pt-4">
               <div>
                 <h4 className="font-mono text-xs font-bold text-foreground">
-                  Shareable Link
+                  Shareable Link & Unique Tag
                 </h4>
                 <p className="font-mono text-[11px] text-muted-foreground">
-                  arcitype.app/account?tab=public&user={user.username}
+                  arcitype.app/account?tab=public&user={user.username} ({user.profileId})
                 </p>
               </div>
               <button
@@ -733,6 +1009,18 @@ function AccountContent() {
                   onChange={(e) => setEditName(e.target.value)}
                   type="text"
                   value={editName}
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-muted-foreground mb-1">
+                  Unique Profile Tag
+                </label>
+                <input
+                  className="w-full max-w-md rounded-xl border border-border bg-background/50 px-3.5 py-2 text-xs text-muted-foreground font-bold cursor-not-allowed"
+                  disabled
+                  type="text"
+                  value={user.profileId}
                 />
               </div>
 
