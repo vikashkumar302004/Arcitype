@@ -371,8 +371,8 @@ export function RaceArenaModal({ isOpen, onClose }: RaceArenaModalProps) {
                             const text = await navigator.clipboard.readText();
                             if (text) {
                               const cleaned = text.includes("room=")
-                                ? text.split("room=")[1].substring(0, 8)
-                                : text;
+                                ? text.split(/room=/i)[1].replace(/[^0-9A-Z]/gi, "").substring(0, 6)
+                                : text.replace(/[^0-9A-Z]/gi, "").substring(0, 6);
                               setJoinCode(cleaned);
                               handleJoin(cleaned);
                             }
@@ -388,8 +388,9 @@ export function RaceArenaModal({ isOpen, onClose }: RaceArenaModalProps) {
 
                     <div className="relative flex items-center">
                       <input
-                        className="w-full rounded-2xl border border-border bg-background py-3.5 px-4 text-center font-mono text-lg font-bold text-foreground placeholder:text-muted-foreground/30 focus:border-primary focus:outline-none uppercase tracking-widest"
-                        onChange={(e) => setJoinCode(e.target.value)}
+                        className="w-full rounded-2xl border border-border bg-background py-3.5 px-4 text-center font-mono text-2xl font-black tracking-[0.3em] text-foreground placeholder:text-muted-foreground/30 focus:border-primary focus:outline-none uppercase"
+                        maxLength={6}
+                        onChange={(e) => setJoinCode(e.target.value.replace(/[^0-9A-Z]/gi, ""))}
                         onKeyDown={(e) => {
                           e.stopPropagation();
                           if (e.key === "Enter") {
@@ -401,12 +402,12 @@ export function RaceArenaModal({ isOpen, onClose }: RaceArenaModalProps) {
                           const text = e.clipboardData.getData("text");
                           if (text) {
                             const cleaned = text.includes("room=")
-                              ? text.split("room=")[1].substring(0, 8)
-                              : text;
+                              ? text.split(/room=/i)[1].replace(/[^0-9A-Z]/gi, "").substring(0, 6)
+                              : text.replace(/[^0-9A-Z]/gi, "").substring(0, 6);
                             setJoinCode(cleaned);
                           }
                         }}
-                        placeholder="ARC-9482"
+                        placeholder="482910"
                         type="text"
                         value={joinCode}
                       />

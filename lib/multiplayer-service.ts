@@ -42,40 +42,57 @@ export interface RaceRoom {
   invitedFriends?: string[];
 }
 
+// Generate pure 6-digit numeric room code (NO hyphens, NO letters)
 export function generateRoomCode(): string {
-  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
-  let suffix = "";
-  for (let i = 0; i < 4; i++) {
-    suffix += chars.charAt(Math.floor(Math.random() * chars.length));
-  }
-  return `ARC-${suffix}`;
+  return Math.floor(100000 + Math.random() * 900000).toString();
 }
 
 export function normalizeRoomCode(input: string): string {
   if (!input) return "";
-  let raw = input.trim().toUpperCase();
-  
+  let raw = input.trim();
+
   // Extract code if user pasted a full URL
-  if (raw.includes("ROOM=")) {
-    raw = raw.split("ROOM=")[1].split("&")[0];
+  if (raw.includes("room=") || raw.includes("ROOM=")) {
+    const parts = raw.split(/room=/i);
+    if (parts[1]) {
+      raw = parts[1].split("&")[0];
+    }
   }
 
-  // Remove invalid characters except letters, digits, and hyphen
-  raw = raw.replace(/[^A-Z0-9-]/g, "");
-
-  if (raw.startsWith("ARC-")) {
-    return raw;
-  }
-  if (raw.startsWith("ARC") && raw.length > 3) {
-    return `ARC-${raw.substring(3)}`;
-  }
-  if (!raw.startsWith("ARC")) {
-    return `ARC-${raw}`;
-  }
+  // Strip all non-digit and non-alphanumeric characters
+  raw = raw.replace(/[^0-9A-Z]/gi, "").toUpperCase();
   return raw;
 }
 
-// 1. Create a new Multiplayer Room in Firestore
+// Local storage + BroadcastChannel helper for 0ms cross-tab real-time sync
+function saveLocalRoom(room: RaceRoom) {
+  if (typeof window !== "undefined") {
+    try {
+      localStorage.setItem(`arc-room-${room.roomId}`, JSON.stringify(room));
+      if ("BroadcastChannel" in window) {
+        const bc = new BroadcastChannel("arc_room_sync");
+        bc.postMessage(room);
+        bc.close();
+      }
+    } catch (e) {
+      /* ignore */
+    }
+  }
+}
+
+function getLocalRoom(roomId: string): RaceRoom | null {
+  if (typeof window !== "undefined") {
+    try {
+      const data = localStorage.getItem(`arc-room-${roomId}`);
+      if (data) return JSON.parse(data);
+    } catch (e) {
+      /* ignore */
+    }
+  }
+  return null;
+}
+
+// 1. Create a new Multiplayer Room
 export async function createMultiplayerRoom(
   hostUser: { uid?: string; name: string; avatarUrl?: string },
   settings: {
@@ -135,14 +152,13 @@ export async function createMultiplayerRoom(
     invitedFriends: [],
   };
 
+  saveLocalRoom(roomData);
+
   try {
     const roomRef = doc(db, "rooms", roomId);
     await setDoc(roomRef, roomData);
   } catch (err) {
     console.warn("Firestore offline fallback for room creation:", err);
-    if (typeof window !== "undefined") {
-      localStorage.setItem(`kz-room-${roomId}`, JSON.stringify(roomData));
-    }
   }
 
   return roomId;
@@ -154,28 +170,18 @@ export async function joinMultiplayerRoom(
   user: { uid?: string; name: string; avatarUrl?: string }
 ): Promise<RaceRoom | null> {
   const cleanId = normalizeRoomCode(roomIdInput);
+  if (!cleanId) return null;
   const uid = user.uid || `anon_${Date.now()}`;
 
   try {
     const roomRef = doc(db, "rooms", cleanId);
     let snap = await getDoc(roomRef);
 
-    // Fallback search with raw trimmed input if needed
-    if (!snap.exists()) {
-      const rawRef = doc(db, "rooms", roomIdInput.trim().toUpperCase());
-      snap = await getDoc(rawRef);
-    }
+    let room: RaceRoom | null = snap.exists() ? (snap.data() as RaceRoom) : getLocalRoom(cleanId);
 
-    if (!snap.exists()) {
-      // Check local storage fallback
-      if (typeof window !== "undefined") {
-        const local = localStorage.getItem(`kz-room-${cleanId}`);
-        if (local) return JSON.parse(local);
-      }
+    if (!room) {
       return null;
     }
-
-    const room = snap.data() as RaceRoom;
 
     // Check if player already in room
     const existingPlayerIndex = room.players.findIndex(
@@ -209,15 +215,26 @@ export async function joinMultiplayerRoom(
       updatedPlayers.push(newPlayer);
     }
 
-    await updateDoc(roomRef, { players: updatedPlayers });
-    return { ...room, players: updatedPlayers };
+    const updatedRoom: RaceRoom = { ...room, players: updatedPlayers };
+
+    saveLocalRoom(updatedRoom);
+
+    try {
+      await updateDoc(roomRef, { players: updatedPlayers });
+    } catch (e) {
+      console.warn("Firestore updateDoc offline fallback:", e);
+    }
+
+    return updatedRoom;
   } catch (err: any) {
     console.error("Join room error:", err);
+    const local = getLocalRoom(cleanId);
+    if (local) return local;
     throw err;
   }
 }
 
-// 3. Real-time Firestore subscription
+// 3. Real-time subscription (BroadcastChannel + Firestore onSnapshot)
 export function subscribeToRoom(
   roomId: string,
   onUpdate: (room: RaceRoom) => void
@@ -225,11 +242,31 @@ export function subscribeToRoom(
   const cleanId = normalizeRoomCode(roomId);
   const roomRef = doc(db, "rooms", cleanId);
 
+  // Initial local sync check
+  const initialLocal = getLocalRoom(cleanId);
+  if (initialLocal) {
+    onUpdate(initialLocal);
+  }
+
+  // Cross-tab BroadcastChannel subscription
+  let bc: BroadcastChannel | null = null;
+  if (typeof window !== "undefined" && "BroadcastChannel" in window) {
+    bc = new BroadcastChannel("arc_room_sync");
+    bc.onmessage = (event) => {
+      if (event.data && event.data.roomId === cleanId) {
+        onUpdate(event.data as RaceRoom);
+      }
+    };
+  }
+
+  // Firestore subscription
   const unsubscribe = onSnapshot(
     roomRef,
     (docSnap) => {
       if (docSnap.exists()) {
-        onUpdate(docSnap.data() as RaceRoom);
+        const roomData = docSnap.data() as RaceRoom;
+        saveLocalRoom(roomData);
+        onUpdate(roomData);
       }
     },
     (err) => {
@@ -237,7 +274,10 @@ export function subscribeToRoom(
     }
   );
 
-  return unsubscribe;
+  return () => {
+    unsubscribe();
+    if (bc) bc.close();
+  };
 }
 
 // 4. Toggle Ready state
@@ -248,13 +288,21 @@ export async function togglePlayerReadyState(
   const cleanId = normalizeRoomCode(roomId);
   const roomRef = doc(db, "rooms", cleanId);
   const snap = await getDoc(roomRef);
+  const room = snap.exists() ? (snap.data() as RaceRoom) : getLocalRoom(cleanId);
 
-  if (snap.exists()) {
-    const room = snap.data() as RaceRoom;
+  if (room) {
     const updatedPlayers = room.players.map((p) =>
       p.uid === uid || p.name === uid ? { ...p, isReady: !p.isReady } : p
     );
-    await updateDoc(roomRef, { players: updatedPlayers });
+    const updatedRoom: RaceRoom = { ...room, players: updatedPlayers };
+
+    saveLocalRoom(updatedRoom);
+
+    try {
+      await updateDoc(roomRef, { players: updatedPlayers });
+    } catch (e) {
+      /* ignore */
+    }
   }
 }
 
@@ -262,17 +310,45 @@ export async function togglePlayerReadyState(
 export async function startMultiplayerRace(roomId: string): Promise<void> {
   const cleanId = normalizeRoomCode(roomId);
   const roomRef = doc(db, "rooms", cleanId);
-  await updateDoc(roomRef, {
-    status: "countdown",
-    countdownStart: Date.now(),
-  });
+  const snap = await getDoc(roomRef);
+  const room = snap.exists() ? (snap.data() as RaceRoom) : getLocalRoom(cleanId);
+
+  if (room) {
+    const updatedRoom: RaceRoom = {
+      ...room,
+      status: "countdown",
+      countdownStart: Date.now(),
+    };
+    saveLocalRoom(updatedRoom);
+
+    try {
+      await updateDoc(roomRef, {
+        status: "countdown",
+        countdownStart: Date.now(),
+      });
+    } catch (e) {
+      /* ignore */
+    }
+  }
 }
 
 // 6. Update status to racing
 export async function setRoomStatusRacing(roomId: string): Promise<void> {
   const cleanId = normalizeRoomCode(roomId);
   const roomRef = doc(db, "rooms", cleanId);
-  await updateDoc(roomRef, { status: "racing" });
+  const snap = await getDoc(roomRef);
+  const room = snap.exists() ? (snap.data() as RaceRoom) : getLocalRoom(cleanId);
+
+  if (room) {
+    const updatedRoom: RaceRoom = { ...room, status: "racing" };
+    saveLocalRoom(updatedRoom);
+
+    try {
+      await updateDoc(roomRef, { status: "racing" });
+    } catch (e) {
+      /* ignore */
+    }
+  }
 }
 
 // 7. Finish Race for a player
@@ -284,9 +360,9 @@ export async function finishPlayerRace(
   const cleanId = normalizeRoomCode(roomId);
   const roomRef = doc(db, "rooms", cleanId);
   const snap = await getDoc(roomRef);
+  const room = snap.exists() ? (snap.data() as RaceRoom) : getLocalRoom(cleanId);
 
-  if (snap.exists()) {
-    const room = snap.data() as RaceRoom;
+  if (room) {
     const updatedPlayers = room.players.map((p) =>
       p.uid === uid || p.name === uid
         ? {
@@ -304,10 +380,22 @@ export async function finishPlayerRace(
     const allFinished = updatedPlayers.every((p) => p.finished);
     const newStatus = allFinished ? "finished" : room.status;
 
-    await updateDoc(roomRef, {
+    const updatedRoom: RaceRoom = {
+      ...room,
       players: updatedPlayers,
       status: newStatus,
-    });
+    };
+
+    saveLocalRoom(updatedRoom);
+
+    try {
+      await updateDoc(roomRef, {
+        players: updatedPlayers,
+        status: newStatus,
+      });
+    } catch (e) {
+      /* ignore */
+    }
   }
 }
 
@@ -318,7 +406,11 @@ export async function inviteFriendToRoom(
 ): Promise<void> {
   const cleanId = normalizeRoomCode(roomId);
   const roomRef = doc(db, "rooms", cleanId);
-  await updateDoc(roomRef, {
-    invitedFriends: arrayUnion(friendName),
-  });
+  try {
+    await updateDoc(roomRef, {
+      invitedFriends: arrayUnion(friendName),
+    });
+  } catch (e) {
+    /* ignore */
+  }
 }
