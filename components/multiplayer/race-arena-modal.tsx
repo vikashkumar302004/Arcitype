@@ -170,9 +170,17 @@ export function RaceArenaModal({ isOpen, onClose }: RaceArenaModalProps) {
     await startMultiplayerRace(currentRoom.roomId);
   };
 
-  const myPlayer = currentRoom?.players.find(
-    (p) => p.uid === user?.uid || p.name === user?.username
-  );
+  const isHostUser =
+    Boolean(currentRoom) &&
+    (currentRoom?.hostUid === user?.uid ||
+      currentRoom?.hostName === (user?.username || "SpeedTypist") ||
+      currentRoom?.players.some((p) => p.isHost && (p.uid === user?.uid || p.name === user?.username)) ||
+      (currentRoom?.players.length ? currentRoom.players[0].name === (user?.username || "SpeedTypist") : false));
+
+  const myPlayer =
+    currentRoom?.players.find(
+      (p) => (user?.uid && p.uid === user.uid) || (user?.username && p.name === user.username)
+    ) || (currentRoom && isHostUser ? currentRoom.players[0] : undefined);
 
   return (
     <AnimatePresence>
@@ -490,12 +498,12 @@ export function RaceArenaModal({ isOpen, onClose }: RaceArenaModalProps) {
                         <div>
                           <span className="text-xs font-bold text-foreground flex items-center gap-1.5">
                             {player.name}
-                            {player.isHost && (
+                            {(player.isHost || player.name === currentRoom.hostName || player.uid === currentRoom.hostUid) && (
                               <Crown size={14} className="text-amber-400" weight="fill" />
                             )}
                           </span>
                           <span className="text-[10px] text-muted-foreground">
-                            {player.isHost ? "Host" : "Competitor"}
+                            {(player.isHost || player.name === currentRoom.hostName || player.uid === currentRoom.hostUid) ? "Host" : "Competitor"}
                           </span>
                         </div>
                       </div>
@@ -536,7 +544,7 @@ export function RaceArenaModal({ isOpen, onClose }: RaceArenaModalProps) {
                   Leave Lobby
                 </button>
 
-                {myPlayer?.isHost ? (
+                {(myPlayer?.isHost || isHostUser) ? (
                   <button
                     className="flex items-center gap-2 rounded-2xl bg-primary px-6 py-2.5 text-xs font-bold text-primary-foreground shadow-lg transition-transform active:scale-[0.98] hover:opacity-95"
                     onClick={handleHostStart}

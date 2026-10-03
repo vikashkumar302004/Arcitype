@@ -258,12 +258,20 @@ export async function joinMultiplayerRoom(
   if (!cleanId) return null;
   const uid = user.uid || `anon_${Date.now()}`;
 
+  let room: RaceRoom | null = null;
+
+  // Fetch local or broadcast first to check host status
+  const existingLocal = getLocalRoom(cleanId);
+  const isHostPlayer =
+    (existingLocal && (existingLocal.hostUid === uid || existingLocal.hostName === user.name)) ||
+    false;
+
   const newPlayer: RacePlayer = {
     uid,
     name: user.name,
     avatarUrl: user.avatarUrl,
-    isHost: false,
-    isReady: false,
+    isHost: isHostPlayer,
+    isReady: isHostPlayer ? true : false,
     finished: false,
     wpm: 0,
     rawWpm: 0,
@@ -271,9 +279,7 @@ export async function joinMultiplayerRoom(
     consistency: 0,
   };
 
-  let room: RaceRoom | null = null;
-
-  // Step 1: Try Server API (Fastest & Most Reliable across all tabs/windows)
+  // Step 1: Try Server API
   try {
     const res = await fetch("/api/rooms", {
       method: "POST",
@@ -291,7 +297,7 @@ export async function joinMultiplayerRoom(
     console.warn("API join notice:", e);
   }
 
-  // Step 2: Try Firestore if API didn't return
+  // Step 2: Try Firestore
   if (!room) {
     try {
       const roomRef = doc(db, "rooms", cleanId);
@@ -299,15 +305,28 @@ export async function joinMultiplayerRoom(
       if (snap.exists()) {
         room = snap.data() as RaceRoom;
         
-        // Add player to room
+        const isHost =
+          room.hostUid === uid ||
+          room.hostName === user.name ||
+          (room.players && room.players[0] && (room.players[0].uid === uid || room.players[0].name === user.name && room.players[0].isHost));
+
         const idx = room.players.findIndex((p) => p.uid === uid || p.name === user.name);
         if (idx >= 0) {
-          room.players[idx] = { ...room.players[idx], ...newPlayer };
+          room.players[idx] = {
+            ...room.players[idx],
+            ...newPlayer,
+            isHost: isHost || room.players[idx].isHost,
+            isReady: isHost ? true : room.players[idx].isReady,
+          };
         } else {
           if (room.players.length >= room.maxPlayers) {
             throw new Error(`Room ${cleanId} is full! Maximum limit of ${room.maxPlayers} players reached.`);
           }
-          room.players.push(newPlayer);
+          room.players.push({
+            ...newPlayer,
+            isHost: !!isHost,
+            isReady: isHost ? true : false,
+          });
         }
 
         try {
@@ -326,14 +345,28 @@ export async function joinMultiplayerRoom(
     const local = getLocalRoom(cleanId);
     if (local) {
       room = local;
+      const isHost =
+        room.hostUid === uid ||
+        room.hostName === user.name ||
+        (room.players && room.players[0] && (room.players[0].uid === uid || room.players[0].name === user.name && room.players[0].isHost));
+
       const idx = room.players.findIndex((p) => p.uid === uid || p.name === user.name);
       if (idx >= 0) {
-        room.players[idx] = { ...room.players[idx], ...newPlayer };
+        room.players[idx] = {
+          ...room.players[idx],
+          ...newPlayer,
+          isHost: isHost || room.players[idx].isHost,
+          isReady: isHost ? true : room.players[idx].isReady,
+        };
       } else {
         if (room.players.length >= room.maxPlayers) {
           throw new Error(`Room ${cleanId} is full! Maximum limit of ${room.maxPlayers} players reached.`);
         }
-        room.players.push(newPlayer);
+        room.players.push({
+          ...newPlayer,
+          isHost: !!isHost,
+          isReady: isHost ? true : false,
+        });
       }
     }
   }
@@ -343,14 +376,28 @@ export async function joinMultiplayerRoom(
     const meshRoom = await queryRoomOverBroadcast(cleanId);
     if (meshRoom) {
       room = meshRoom;
+      const isHost =
+        room.hostUid === uid ||
+        room.hostName === user.name ||
+        (room.players && room.players[0] && (room.players[0].uid === uid || room.players[0].name === user.name && room.players[0].isHost));
+
       const idx = room.players.findIndex((p) => p.uid === uid || p.name === user.name);
       if (idx >= 0) {
-        room.players[idx] = { ...room.players[idx], ...newPlayer };
+        room.players[idx] = {
+          ...room.players[idx],
+          ...newPlayer,
+          isHost: isHost || room.players[idx].isHost,
+          isReady: isHost ? true : room.players[idx].isReady,
+        };
       } else {
         if (room.players.length >= room.maxPlayers) {
           throw new Error(`Room ${cleanId} is full! Maximum limit of ${room.maxPlayers} players reached.`);
         }
-        room.players.push(newPlayer);
+        room.players.push({
+          ...newPlayer,
+          isHost: !!isHost,
+          isReady: isHost ? true : false,
+        });
       }
     }
   }

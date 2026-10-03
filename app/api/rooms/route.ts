@@ -47,11 +47,21 @@ export async function POST(request: Request) {
 
       // Check if player exists
       const idx = existing.players.findIndex(
-        (p: any) => p.uid === player.uid || p.name === player.name
+        (p: any) => p.uid === player.uid || (player.name && p.name === player.name)
       );
 
+      const isHostPlayer =
+        (idx >= 0 && existing.players[idx].isHost) ||
+        player.uid === existing.hostUid ||
+        player.name === existing.hostName;
+
       if (idx >= 0) {
-        existing.players[idx] = { ...existing.players[idx], ...player };
+        existing.players[idx] = {
+          ...existing.players[idx],
+          ...player,
+          isHost: isHostPlayer,
+          isReady: isHostPlayer ? true : (existing.players[idx].isReady || player.isReady),
+        };
       } else {
         if (existing.players.length >= existing.maxPlayers) {
           return NextResponse.json(
@@ -59,7 +69,11 @@ export async function POST(request: Request) {
             { status: 400 }
           );
         }
-        existing.players.push(player);
+        existing.players.push({
+          ...player,
+          isHost: isHostPlayer,
+          isReady: isHostPlayer ? true : (player.isReady || false),
+        });
       }
 
       globalRooms.set(targetId, existing);
