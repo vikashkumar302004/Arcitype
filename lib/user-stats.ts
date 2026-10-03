@@ -1,5 +1,8 @@
 "use client";
 
+import { doc, setDoc, getDoc } from "firebase/firestore";
+import { db } from "@/lib/firebase";
+
 export interface TestResultRecord {
   id: string;
   timestamp: number;
@@ -17,6 +20,8 @@ export interface UserStatsSummary {
   testsStarted: number;
   testsCompleted: number;
   totalTimeTypingSeconds: number;
+  currentStreak: number;
+  maxStreak: number;
   personalBests: {
     time: Record<string, { wpm: number; accuracy: number }>;
     words: Record<string, { wpm: number; accuracy: number }>;
@@ -27,12 +32,102 @@ export interface UserStatsSummary {
 const STATS_STORAGE_KEY = "kz-user-stats-history";
 const TESTS_STARTED_KEY = "kz-tests-started-count";
 
+export function calculateStreaks(history: TestResultRecord[]): {
+  currentStreak: number;
+  maxStreak: number;
+} {
+  if (!history || history.length === 0) {
+    return { currentStreak: 0, maxStreak: 0 };
+  }
+
+  // Group test timestamps by YYYY-MM-DD
+  const daysSet = new Set<string>();
+  for (const item of history) {
+    const d = new Date(item.timestamp);
+    const dateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(
+      2,
+      "0"
+    )}-${String(d.getDate()).padStart(2, "0")}`;
+    daysSet.add(dateStr);
+  }
+
+  const sortedDays = Array.from(daysSet).sort().reverse();
+  if (sortedDays.length === 0) {
+    return { currentStreak: 0, maxStreak: 0 };
+  }
+
+  const today = new Date();
+  const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(
+    2,
+    "0"
+  )}-${String(today.getDate()).padStart(2, "0")}`;
+  
+  const yesterday = new Date();
+  yesterday.setDate(today.getDate() - 1);
+  const yesterdayStr = `${yesterday.getFullYear()}-${String(yesterday.getMonth() + 1).padStart(
+    2,
+    "0"
+  )}-${String(yesterday.getDate()).padStart(2, "0")}`;
+
+  let currentStreak = 0;
+  let maxStreak = 0;
+  let tempStreak = 0;
+
+  // Calculate current streak
+  let checkDate = new Date();
+  let hasActivityToday = daysSet.has(todayStr);
+  if (!hasActivityToday && !daysSet.has(yesterdayStr)) {
+    currentStreak = 0;
+  } else {
+    if (!hasActivityToday) {
+      checkDate.setDate(checkDate.getDate() - 1);
+    }
+    while (true) {
+      const ds = `${checkDate.getFullYear()}-${String(
+        checkDate.getMonth() + 1
+      ).padStart(2, "0")}-${String(checkDate.getDate()).padStart(2, "0")}`;
+      if (daysSet.has(ds)) {
+        currentStreak++;
+        checkDate.setDate(checkDate.getDate() - 1);
+      } else {
+        break;
+      }
+    }
+  }
+
+  // Calculate max streak
+  const chronological = Array.from(daysSet).sort();
+  if (chronological.length > 0) {
+    tempStreak = 1;
+    maxStreak = 1;
+    for (let i = 1; i < chronological.length; i++) {
+      const prev = new Date(chronological[i - 1]);
+      const curr = new Date(chronological[i]);
+      const diffDays = Math.round(
+        (curr.getTime() - prev.getTime()) / (1000 * 3600 * 24)
+      );
+      if (diffDays === 1) {
+        tempStreak++;
+      } else {
+        tempStreak = 1;
+      }
+      if (tempStreak > maxStreak) {
+        maxStreak = tempStreak;
+      }
+    }
+  }
+
+  return { currentStreak, maxStreak: Math.max(maxStreak, currentStreak) };
+}
+
 export function getStoredUserStats(): UserStatsSummary {
   if (typeof window === "undefined") {
     return {
       testsStarted: 0,
       testsCompleted: 0,
       totalTimeTypingSeconds: 0,
+      currentStreak: 0,
+      maxStreak: 0,
       personalBests: { time: {}, words: {} },
       history: [],
     };
@@ -57,6 +152,8 @@ export function getStoredUserStats(): UserStatsSummary {
     0
   );
 
+  const { currentStreak, maxStreak } = calculateStreaks(history);
+
   // Compute Personal Bests from history + individual keys
   const personalBests: UserStatsSummary["personalBests"] = {
     time: {
@@ -77,6 +174,8 @@ export function getStoredUserStats(): UserStatsSummary {
     testsStarted: Math.max(testsStarted, testsCompleted),
     testsCompleted,
     totalTimeTypingSeconds,
+    currentStreak,
+    maxStreak,
     personalBests,
     history,
   };
@@ -87,7 +186,6 @@ function getPBForMode(
   detail: string,
   history: TestResultRecord[]
 ): { wpm: number; accuracy: number } {
-  // Check direct localstorage key first
   const directKey = `kz-pb-${mode}-${detail}`;
   if (typeof window !== "undefined") {
     const raw = localStorage.getItem(directKey);
@@ -103,7 +201,6 @@ function getPBForMode(
     }
   }
 
-  // Fallback to highest WPM in history
   const filtered = history.filter(
     (h) => h.mode === mode && String(h.modeDetail) === String(detail)
   );
@@ -123,7 +220,7 @@ export function incrementTestsStarted(): void {
   localStorage.setItem(TESTS_STARTED_KEY, String(current + 1));
 }
 
-export function recordCompletedTest(result: {
+export async function recordCompletedTest(result: {
   mode: string;
   modeDetail: string;
   wpm: number;
@@ -132,20 +229,28 @@ export function recordCompletedTest(result: {
   consistency: number;
   elapsedSeconds: number;
   language: string;
-}): void {
+  uid?: string;
+}): Promise<void> {
   if (typeof window === "undefined") return;
 
   const currentStats = getStoredUserStats();
   const record: TestResultRecord = {
     id: `test_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
     timestamp: Date.now(),
-    ...result,
+    mode: result.mode,
+    modeDetail: result.modeDetail,
+    wpm: result.wpm,
+    rawWpm: result.rawWpm,
+    accuracy: result.accuracy,
+    consistency: result.consistency,
+    elapsedSeconds: result.elapsedSeconds,
+    language: result.language,
   };
 
   const newHistory = [record, ...currentStats.history];
   localStorage.setItem(STATS_STORAGE_KEY, JSON.stringify(newHistory));
 
-  // Update PB if better WPM
+  // Update PB
   const directKey = `kz-pb-${result.mode}-${result.modeDetail}`;
   const existingPB = currentStats.personalBests[result.mode as "time" | "words"]?.[result.modeDetail];
   if (!existingPB || result.wpm > existingPB.wpm) {
@@ -157,6 +262,17 @@ export function recordCompletedTest(result: {
         date: new Date().toISOString(),
       })
     );
+  }
+
+  // Sync to Firebase Firestore if logged in
+  if (result.uid) {
+    try {
+      const userRef = doc(db, "users", result.uid);
+      const updatedSummary = getStoredUserStats();
+      await setDoc(userRef, { stats: updatedSummary }, { merge: true });
+    } catch (err) {
+      console.warn("Firestore stats sync notice:", err);
+    }
   }
 }
 

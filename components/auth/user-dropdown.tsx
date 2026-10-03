@@ -99,7 +99,7 @@ export function UserDropdown() {
 
               <button
                 className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2 font-medium text-foreground/90 transition-colors hover:bg-foreground/[0.08] hover:text-foreground text-left"
-                onClick={() => navigateTo("/account?tab=settings&highlight=public")}
+                onClick={() => navigateTo("/account?tab=public")}
                 type="button"
               >
                 <Globe size={16} className="text-muted-foreground" weight="bold" />
