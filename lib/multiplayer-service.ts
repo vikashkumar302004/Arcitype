@@ -139,7 +139,7 @@ function queryRoomOverBroadcast(roomId: string): Promise<RaceRoom | null> {
           bc.close();
           resolve(null);
         }
-      }, 400);
+      }, 300);
 
       bc.onmessage = (event) => {
         if (
@@ -227,6 +227,18 @@ export async function createMultiplayerRoom(
 
   saveLocalRoom(roomData);
 
+  // Sync with Server API
+  try {
+    await fetch("/api/rooms", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "create", room: roomData }),
+    });
+  } catch (err) {
+    console.warn("API room creation notice:", err);
+  }
+
+  // Sync with Firestore
   try {
     const roomRef = doc(db, "rooms", roomId);
     await setDoc(roomRef, roomData);
@@ -246,80 +258,112 @@ export async function joinMultiplayerRoom(
   if (!cleanId) return null;
   const uid = user.uid || `anon_${Date.now()}`;
 
+  const newPlayer: RacePlayer = {
+    uid,
+    name: user.name,
+    avatarUrl: user.avatarUrl,
+    isHost: false,
+    isReady: false,
+    finished: false,
+    wpm: 0,
+    rawWpm: 0,
+    accuracy: 0,
+    consistency: 0,
+  };
+
   let room: RaceRoom | null = null;
 
-  // Step A: Check Firestore
+  // Step 1: Try Server API (Fastest & Most Reliable across all tabs/windows)
   try {
-    const roomRef = doc(db, "rooms", cleanId);
-    const snap = await getDoc(roomRef);
-    if (snap.exists()) {
-      room = snap.data() as RaceRoom;
+    const res = await fetch("/api/rooms", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        action: "join",
+        roomId: cleanId,
+        player: newPlayer,
+      }),
+    });
+    if (res.ok) {
+      room = await res.json();
     }
-  } catch (err) {
-    console.warn("Firestore getDoc notice:", err);
+  } catch (e) {
+    console.warn("API join notice:", e);
   }
 
-  // Step B: Check Local Storage index & keys
+  // Step 2: Try Firestore if API didn't return
   if (!room) {
-    room = getLocalRoom(cleanId);
+    try {
+      const roomRef = doc(db, "rooms", cleanId);
+      const snap = await getDoc(roomRef);
+      if (snap.exists()) {
+        room = snap.data() as RaceRoom;
+        
+        // Add player to room
+        const idx = room.players.findIndex((p) => p.uid === uid || p.name === user.name);
+        if (idx >= 0) {
+          room.players[idx] = { ...room.players[idx], ...newPlayer };
+        } else {
+          if (room.players.length >= room.maxPlayers) {
+            throw new Error(`Room ${cleanId} is full! Maximum limit of ${room.maxPlayers} players reached.`);
+          }
+          room.players.push(newPlayer);
+        }
+
+        try {
+          await updateDoc(roomRef, { players: room.players });
+        } catch {
+          /* ignore */
+        }
+      }
+    } catch (err) {
+      console.warn("Firestore getDoc notice:", err);
+    }
   }
 
-  // Step C: P2P Broadcast Mesh Ping/Pong across open tabs
+  // Step 3: Local Storage index & keys fallback
+  if (!room) {
+    const local = getLocalRoom(cleanId);
+    if (local) {
+      room = local;
+      const idx = room.players.findIndex((p) => p.uid === uid || p.name === user.name);
+      if (idx >= 0) {
+        room.players[idx] = { ...room.players[idx], ...newPlayer };
+      } else {
+        if (room.players.length >= room.maxPlayers) {
+          throw new Error(`Room ${cleanId} is full! Maximum limit of ${room.maxPlayers} players reached.`);
+        }
+        room.players.push(newPlayer);
+      }
+    }
+  }
+
+  // Step 4: P2P Broadcast Mesh Ping/Pong
   if (!room && typeof window !== "undefined") {
-    room = await queryRoomOverBroadcast(cleanId);
+    const meshRoom = await queryRoomOverBroadcast(cleanId);
+    if (meshRoom) {
+      room = meshRoom;
+      const idx = room.players.findIndex((p) => p.uid === uid || p.name === user.name);
+      if (idx >= 0) {
+        room.players[idx] = { ...room.players[idx], ...newPlayer };
+      } else {
+        if (room.players.length >= room.maxPlayers) {
+          throw new Error(`Room ${cleanId} is full! Maximum limit of ${room.maxPlayers} players reached.`);
+        }
+        room.players.push(newPlayer);
+      }
+    }
   }
 
   if (!room) {
     return null;
   }
 
-  // Check if player already in room
-  const existingPlayerIndex = room.players.findIndex(
-    (p) => p.uid === uid || (user.name && p.name === user.name)
-  );
-
-  let updatedPlayers = [...room.players];
-  if (existingPlayerIndex >= 0) {
-    updatedPlayers[existingPlayerIndex] = {
-      ...updatedPlayers[existingPlayerIndex],
-      name: user.name,
-      avatarUrl: user.avatarUrl || updatedPlayers[existingPlayerIndex].avatarUrl,
-    };
-  } else {
-    if (room.players.length >= room.maxPlayers) {
-      throw new Error(`Room ${cleanId} is full! Maximum limit of ${room.maxPlayers} players reached.`);
-    }
-
-    const newPlayer: RacePlayer = {
-      uid,
-      name: user.name,
-      avatarUrl: user.avatarUrl,
-      isHost: false,
-      isReady: false,
-      finished: false,
-      wpm: 0,
-      rawWpm: 0,
-      accuracy: 0,
-      consistency: 0,
-    };
-    updatedPlayers.push(newPlayer);
-  }
-
-  const updatedRoom: RaceRoom = { ...room, players: updatedPlayers };
-
-  saveLocalRoom(updatedRoom);
-
-  try {
-    const roomRef = doc(db, "rooms", cleanId);
-    await updateDoc(roomRef, { players: updatedPlayers });
-  } catch (e) {
-    console.warn("Firestore updateDoc fallback:", e);
-  }
-
-  return updatedRoom;
+  saveLocalRoom(room);
+  return room;
 }
 
-// 3. Real-time subscription (BroadcastChannel + Firestore onSnapshot)
+// 3. Real-time subscription (Server API Polling + BroadcastChannel + Firestore)
 export function subscribeToRoom(
   roomId: string,
   onUpdate: (room: RaceRoom) => void
@@ -332,6 +376,20 @@ export function subscribeToRoom(
   if (initialLocal) {
     onUpdate(initialLocal);
   }
+
+  // Polling Server API every 800ms for active real-time updates across tabs/browsers
+  const intervalId = setInterval(async () => {
+    try {
+      const res = await fetch(`/api/rooms?code=${cleanId}`);
+      if (res.ok) {
+        const serverRoom = await res.json();
+        saveLocalRoom(serverRoom);
+        onUpdate(serverRoom);
+      }
+    } catch {
+      /* ignore */
+    }
+  }, 800);
 
   // Cross-tab BroadcastChannel subscription
   let bc: BroadcastChannel | null = null;
@@ -349,7 +407,7 @@ export function subscribeToRoom(
   }
 
   // Firestore subscription
-  const unsubscribe = onSnapshot(
+  const unsubscribeFirestore = onSnapshot(
     roomRef,
     (docSnap) => {
       if (docSnap.exists()) {
@@ -364,7 +422,8 @@ export function subscribeToRoom(
   );
 
   return () => {
-    unsubscribe();
+    clearInterval(intervalId);
+    unsubscribeFirestore();
     if (bc) bc.close();
   };
 }
@@ -375,27 +434,35 @@ export async function togglePlayerReadyState(
   uid: string
 ): Promise<void> {
   const cleanId = normalizeRoomCode(roomId);
-  const roomRef = doc(db, "rooms", cleanId);
-  let room: RaceRoom | null = null;
+  
+  // API update
   try {
-    const snap = await getDoc(roomRef);
-    if (snap.exists()) room = snap.data() as RaceRoom;
+    const res = await fetch("/api/rooms", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "toggleReady", roomId: cleanId, uid }),
+    });
+    if (res.ok) {
+      const updated = await res.json();
+      saveLocalRoom(updated);
+    }
   } catch {
     /* ignore */
   }
-  if (!room) room = getLocalRoom(cleanId);
 
+  // Local & Firestore backup
+  const room = getLocalRoom(cleanId);
   if (room) {
     const updatedPlayers = room.players.map((p) =>
       p.uid === uid || p.name === uid ? { ...p, isReady: !p.isReady } : p
     );
     const updatedRoom: RaceRoom = { ...room, players: updatedPlayers };
-
     saveLocalRoom(updatedRoom);
 
     try {
+      const roomRef = doc(db, "rooms", cleanId);
       await updateDoc(roomRef, { players: updatedPlayers });
-    } catch (e) {
+    } catch {
       /* ignore */
     }
   }
@@ -404,16 +471,23 @@ export async function togglePlayerReadyState(
 // 5. Start Race (Host triggers 3-2-1 countdown)
 export async function startMultiplayerRace(roomId: string): Promise<void> {
   const cleanId = normalizeRoomCode(roomId);
-  const roomRef = doc(db, "rooms", cleanId);
-  let room: RaceRoom | null = null;
+
+  // API update
   try {
-    const snap = await getDoc(roomRef);
-    if (snap.exists()) room = snap.data() as RaceRoom;
+    const res = await fetch("/api/rooms", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "startRace", roomId: cleanId }),
+    });
+    if (res.ok) {
+      const updated = await res.json();
+      saveLocalRoom(updated);
+    }
   } catch {
     /* ignore */
   }
-  if (!room) room = getLocalRoom(cleanId);
 
+  const room = getLocalRoom(cleanId);
   if (room) {
     const updatedRoom: RaceRoom = {
       ...room,
@@ -423,11 +497,12 @@ export async function startMultiplayerRace(roomId: string): Promise<void> {
     saveLocalRoom(updatedRoom);
 
     try {
+      const roomRef = doc(db, "rooms", cleanId);
       await updateDoc(roomRef, {
         status: "countdown",
         countdownStart: Date.now(),
       });
-    } catch (e) {
+    } catch {
       /* ignore */
     }
   }
@@ -436,23 +511,30 @@ export async function startMultiplayerRace(roomId: string): Promise<void> {
 // 6. Update status to racing
 export async function setRoomStatusRacing(roomId: string): Promise<void> {
   const cleanId = normalizeRoomCode(roomId);
-  const roomRef = doc(db, "rooms", cleanId);
-  let room: RaceRoom | null = null;
+
   try {
-    const snap = await getDoc(roomRef);
-    if (snap.exists()) room = snap.data() as RaceRoom;
+    const res = await fetch("/api/rooms", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "setRacing", roomId: cleanId }),
+    });
+    if (res.ok) {
+      const updated = await res.json();
+      saveLocalRoom(updated);
+    }
   } catch {
     /* ignore */
   }
-  if (!room) room = getLocalRoom(cleanId);
 
+  const room = getLocalRoom(cleanId);
   if (room) {
     const updatedRoom: RaceRoom = { ...room, status: "racing" };
     saveLocalRoom(updatedRoom);
 
     try {
+      const roomRef = doc(db, "rooms", cleanId);
       await updateDoc(roomRef, { status: "racing" });
-    } catch (e) {
+    } catch {
       /* ignore */
     }
   }
@@ -465,16 +547,22 @@ export async function finishPlayerRace(
   stats: { wpm: number; rawWpm: number; accuracy: number; consistency: number }
 ): Promise<void> {
   const cleanId = normalizeRoomCode(roomId);
-  const roomRef = doc(db, "rooms", cleanId);
-  let room: RaceRoom | null = null;
+
   try {
-    const snap = await getDoc(roomRef);
-    if (snap.exists()) room = snap.data() as RaceRoom;
+    const res = await fetch("/api/rooms", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "finishPlayer", roomId: cleanId, uid, stats }),
+    });
+    if (res.ok) {
+      const updated = await res.json();
+      saveLocalRoom(updated);
+    }
   } catch {
     /* ignore */
   }
-  if (!room) room = getLocalRoom(cleanId);
 
+  const room = getLocalRoom(cleanId);
   if (room) {
     const updatedPlayers = room.players.map((p) =>
       p.uid === uid || p.name === uid
@@ -502,11 +590,12 @@ export async function finishPlayerRace(
     saveLocalRoom(updatedRoom);
 
     try {
+      const roomRef = doc(db, "rooms", cleanId);
       await updateDoc(roomRef, {
         players: updatedPlayers,
         status: newStatus,
       });
-    } catch (e) {
+    } catch {
       /* ignore */
     }
   }
@@ -518,12 +607,12 @@ export async function inviteFriendToRoom(
   friendName: string
 ): Promise<void> {
   const cleanId = normalizeRoomCode(roomId);
-  const roomRef = doc(db, "rooms", cleanId);
   try {
+    const roomRef = doc(db, "rooms", cleanId);
     await updateDoc(roomRef, {
       invitedFriends: arrayUnion(friendName),
     });
-  } catch (e) {
+  } catch {
     /* ignore */
   }
 }
