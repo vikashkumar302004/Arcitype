@@ -29,6 +29,47 @@ export interface UserStatsSummary {
   history: TestResultRecord[];
 }
 
+export interface UserLevelInfo {
+  level: number;
+  totalXP: number;
+  currentLevelXP: number;
+  nextLevelXP: number;
+  progressPercent: number;
+}
+
+export function calculateUserLevelAndXP(history: TestResultRecord[]): UserLevelInfo {
+  if (!history || history.length === 0) {
+    return {
+      level: 1,
+      totalXP: 0,
+      currentLevelXP: 0,
+      nextLevelXP: 100,
+      progressPercent: 0,
+    };
+  }
+
+  let totalXP = 0;
+  for (const item of history) {
+    const baseWpmXP = Math.round((item.wpm || 0) * ((item.accuracy || 100) / 100));
+    const durationMultiplier = Math.max(1, Math.round((item.elapsedSeconds || 15) / 15));
+    const testXP = Math.max(25, baseWpmXP * durationMultiplier);
+    totalXP += testXP;
+  }
+
+  const level = Math.floor(totalXP / 100) + 1;
+  const currentLevelXP = totalXP % 100;
+  const nextLevelXP = 100;
+  const progressPercent = Math.min(100, Math.max(0, currentLevelXP));
+
+  return {
+    level,
+    totalXP,
+    currentLevelXP,
+    nextLevelXP,
+    progressPercent,
+  };
+}
+
 const STATS_STORAGE_KEY = "kz-user-stats-history";
 const TESTS_STARTED_KEY = "kz-tests-started-count";
 

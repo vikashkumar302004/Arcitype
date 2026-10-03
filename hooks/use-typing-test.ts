@@ -143,6 +143,7 @@ export function useTypingTest({
   const wpmNumerator = wpmNumeratorFromCounts(mtCounts);
   const accuracy = accuracyFromCounts(mtCounts);
   correctCharsRef.current = wpmNumerator;
+  const hasRecordedResultRef = useRef(false);
 
   // Rule 1: derive realtime WPM inline — re-computed on every render triggered
   // by a keystroke (typed changes → re-render), no useEffect needed.
@@ -626,6 +627,7 @@ export function useTypingTest({
       }
 
       if (e.key === "Backspace") {
+        e.preventDefault();
         if (confidenceMode === "max") {
           return;
         }
@@ -807,19 +809,23 @@ export function useTypingTest({
       keyHits: keyHitsRef.current,
     };
 
-    recordCompletedTest({
-      mode,
-      modeDetail: modeDetailStr,
-      wpm: computedWpm,
-      rawWpm: computedRaw,
-      accuracy,
-      consistency,
-      elapsedSeconds: Math.round(elapsed),
-      language,
-    });
+    if (!hasRecordedResultRef.current) {
+      hasRecordedResultRef.current = true;
+      recordCompletedTest({
+        mode,
+        modeDetail: modeDetailStr,
+        wpm: computedWpm,
+        rawWpm: computedRaw,
+        accuracy,
+        consistency,
+        elapsedSeconds: Math.round(elapsed),
+        language,
+      });
+    }
   }
   if (!finished) {
     frozenStatsRef.current = null;
+    hasRecordedResultRef.current = false;
   }
 
   // Resets all typing state but keeps the current word list (for "restart same test").

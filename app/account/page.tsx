@@ -37,6 +37,7 @@ import { useAuth } from "@/lib/auth-context";
 import {
   formatTimeTyping,
   getStoredUserStats,
+  calculateUserLevelAndXP,
   type UserStatsSummary,
 } from "@/lib/user-stats";
 
@@ -243,6 +244,11 @@ function AccountContent() {
       }));
   }, [stats]);
 
+  const levelInfo = useMemo(
+    () => calculateUserLevelAndXP(stats?.history || []),
+    [stats]
+  );
+
   const pbTime = stats?.personalBests.time || {
     "15": { wpm: 0, accuracy: 0 },
     "30": { wpm: 0, accuracy: 0 },
@@ -340,16 +346,16 @@ function AccountContent() {
               {/* Level & XP bar */}
               <div className="mt-1 flex items-center gap-3">
                 <span className="font-mono text-[11px] font-bold text-primary">
-                  Lvl 1
+                  Lvl {levelInfo.level}
                 </span>
                 <div className="h-1.5 w-32 md:w-44 rounded-full bg-foreground/10 overflow-hidden">
                   <div
                     className="h-full bg-primary transition-all duration-300"
-                    style={{ width: `${Math.min(100, ((stats?.testsCompleted || 0) * 10) % 100)}%` }}
+                    style={{ width: `${levelInfo.progressPercent}%` }}
                   />
                 </div>
                 <span className="font-mono text-[10px] text-muted-foreground/50">
-                  {((stats?.testsCompleted || 0) * 10) % 100}/100 XP
+                  {levelInfo.currentLevelXP}/100 XP (Total: {levelInfo.totalXP})
                 </span>
               </div>
             </div>
