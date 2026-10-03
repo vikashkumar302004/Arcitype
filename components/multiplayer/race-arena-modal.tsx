@@ -60,7 +60,20 @@ export function RaceArenaModal({ isOpen, onClose }: RaceArenaModalProps) {
   // Active room state
   const [currentRoom, setCurrentRoom] = useState<RaceRoom | null>(null);
   const [copiedCode, setCopiedCode] = useState(false);
+  const [copiedLink, setCopiedLink] = useState(false);
   const [countdownNum, setCountdownNum] = useState<number | null>(null);
+
+  // Auto-join if URL contains ?room=ARC-XXXX
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      const roomParam = params.get("room");
+      if (roomParam) {
+        setJoinCode(roomParam);
+        handleJoin(roomParam);
+      }
+    }
+  }, []);
 
   // Subscribe to Firebase Firestore room changes
   useEffect(() => {
@@ -123,7 +136,7 @@ export function RaceArenaModal({ isOpen, onClose }: RaceArenaModalProps) {
         avatarUrl: user?.avatarUrl,
       });
       if (!roomData) {
-        setJoinError("Room not found! Check code and try again.");
+        setJoinError(`Room "${targetCode}" not found! Double check code & try again.`);
         return;
       }
       setCurrentRoom(roomData);
@@ -137,6 +150,14 @@ export function RaceArenaModal({ isOpen, onClose }: RaceArenaModalProps) {
     navigator.clipboard.writeText(currentRoom.roomId);
     setCopiedCode(true);
     setTimeout(() => setCopiedCode(false), 2000);
+  };
+
+  const handleCopyLink = () => {
+    if (!currentRoom) return;
+    const shareableUrl = `${window.location.origin}/?room=${currentRoom.roomId}`;
+    navigator.clipboard.writeText(shareableUrl);
+    setCopiedLink(true);
+    setTimeout(() => setCopiedLink(false), 2000);
   };
 
   const handleToggleReady = async () => {
@@ -387,14 +408,24 @@ export function RaceArenaModal({ isOpen, onClose }: RaceArenaModalProps) {
                       onClick={handleCopyCode}
                       type="button"
                     >
-                      {copiedCode ? "Copied!" : "Copy Code"}
+                      {copiedCode ? "Copied Code ✓" : "Copy Code"}
+                    </button>
+                    <button
+                      className="rounded-lg border border-primary/30 bg-primary/10 px-2.5 py-1 text-xs font-bold text-primary hover:bg-primary/20"
+                      onClick={handleCopyLink}
+                      type="button"
+                    >
+                      {copiedLink ? "Copied Link ✓" : "Copy Link"}
                     </button>
                   </div>
                 </div>
 
                 <div className="flex items-center gap-2">
+                  <span className="text-xs font-bold text-primary">
+                    Mode: {currentRoom.mode === "time" ? `${currentRoom.modeDetail}s Time` : `${currentRoom.modeDetail} Words`}
+                  </span>
                   <span className="text-xs text-muted-foreground">
-                    {currentRoom.players.length} / {currentRoom.maxPlayers} Joined
+                    ({currentRoom.players.length} / {currentRoom.maxPlayers} Joined)
                   </span>
                 </div>
               </div>
