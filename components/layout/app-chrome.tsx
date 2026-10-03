@@ -32,12 +32,18 @@ import { VisitCount } from "@/components/visit-count";
 import { useAuth } from "@/lib/auth-context";
 import { cn } from "@/lib/utils";
 
+import type { RaceRoom } from "@/lib/multiplayer-service";
+
 interface AppChromeContextValue {
   homeLogoHandlerRef: React.MutableRefObject<(() => void) | null>;
   setSettingsOpen: (open: boolean) => void;
   setTypingActive: (active: boolean) => void;
   settingsOpen: boolean;
   typingActive: boolean;
+  multiplayerRoom: RaceRoom | null;
+  setMultiplayerRoom: (room: RaceRoom | null) => void;
+  isRaceModalOpen: boolean;
+  setIsRaceModalOpen: (open: boolean) => void;
 }
 
 const AppChromeContext = createContext<AppChromeContextValue | null>(null);
@@ -53,6 +59,8 @@ export function useAppChrome() {
 export function AppChrome({ children }: { children: ReactNode }) {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [typingActive, setTypingActive] = useState(false);
+  const [multiplayerRoom, setMultiplayerRoom] = useState<RaceRoom | null>(null);
+  const [isRaceModalOpen, setIsRaceModalOpen] = useState(false);
   const homeLogoHandlerRef = useRef<(() => void) | null>(null);
 
   useEffect(() => {
@@ -82,8 +90,12 @@ export function AppChrome({ children }: { children: ReactNode }) {
       typingActive,
       setTypingActive,
       homeLogoHandlerRef,
+      multiplayerRoom,
+      setMultiplayerRoom,
+      isRaceModalOpen,
+      setIsRaceModalOpen,
     }),
-    [settingsOpen, typingActive]
+    [settingsOpen, typingActive, multiplayerRoom, isRaceModalOpen]
   );
 
   return (
@@ -108,11 +120,10 @@ export function AppChrome({ children }: { children: ReactNode }) {
 
 function SiteHeader() {
   const router = useRouter();
-  const { setSettingsOpen, typingActive, homeLogoHandlerRef } = useAppChrome();
+  const { setSettingsOpen, typingActive, homeLogoHandlerRef, isRaceModalOpen, setIsRaceModalOpen } = useAppChrome();
   const { soundEnabled, setSoundEnabled } = useSettings();
   const { isLoggedIn } = useAuth();
   const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
-  const [isRaceModalOpen, setIsRaceModalOpen] = useState(false);
 
   const dimHeader = typingActive;
 

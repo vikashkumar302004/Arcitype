@@ -145,7 +145,7 @@ export default function RootLayout({
           type="application/ld+json"
         />
       </head>
-      <body>
+      <body suppressHydrationWarning>
         <ThemeProvider>
           <AuthProvider>
             <SettingsProvider>

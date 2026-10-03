@@ -25,6 +25,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
+import { useAppChrome } from "@/components/layout/app-chrome";
 import { useAuth } from "@/lib/auth-context";
 import {
   createMultiplayerRoom,
@@ -47,6 +48,7 @@ interface RaceArenaModalProps {
 
 export function RaceArenaModal({ isOpen, onClose }: RaceArenaModalProps) {
   const { user } = useAuth();
+  const { setMultiplayerRoom, setIsRaceModalOpen } = useAppChrome();
   const [tab, setTab] = useState<"create" | "join">("create");
 
   // Create room options
@@ -62,7 +64,7 @@ export function RaceArenaModal({ isOpen, onClose }: RaceArenaModalProps) {
   const [currentRoom, setCurrentRoom] = useState<RaceRoom | null>(null);
   const [copiedCode, setCopiedCode] = useState(false);
   const [copiedLink, setCopiedLink] = useState(false);
-  const [countdownNum, setCountdownNum] = useState<number | null>(null);
+  const [countdownNum, setCountdownNum] = useState<number | string | null>(null);
 
   // Auto-join if URL contains ?room=ARC-XXXX
   useEffect(() => {
@@ -83,28 +85,51 @@ export function RaceArenaModal({ isOpen, onClose }: RaceArenaModalProps) {
     const unsubscribe = subscribeToRoom(currentRoom.roomId, (updatedRoom) => {
       if (updatedRoom.status === "disbanded") {
         setCurrentRoom(null);
+        setMultiplayerRoom(null);
         setJoinError("Host has closed the race room.");
         return;
       }
       setCurrentRoom(updatedRoom);
+      setMultiplayerRoom(updatedRoom);
 
-      // Handle 3-2-1 countdown trigger
-      if (updatedRoom.status === "countdown" && updatedRoom.countdownStart) {
-        const elapsed = Math.floor((Date.now() - updatedRoom.countdownStart) / 1000);
-        const remaining = 3 - elapsed;
-        if (remaining > 0) {
-          setCountdownNum(remaining);
-        } else {
-          setCountdownNum(null);
-          if (updatedRoom.players.find((p) => p.isHost)?.uid === (user?.uid || "host")) {
-            setRoomStatusRacing(updatedRoom.roomId);
-          }
-        }
+      // Auto open modal when match finishes to display podium stand
+      if (updatedRoom.status === "finished") {
+        setIsRaceModalOpen(true);
       }
     });
 
     return () => unsubscribe();
-  }, [currentRoom?.roomId, user?.uid]);
+  }, [currentRoom?.roomId, setMultiplayerRoom, setIsRaceModalOpen]);
+
+  // Real-time Countdown Timer (3 -> 2 -> 1 -> GO!)
+  useEffect(() => {
+    if (!currentRoom || currentRoom.status !== "countdown" || !currentRoom.countdownStart) {
+      return;
+    }
+
+    const interval = setInterval(() => {
+      const elapsed = Math.floor((Date.now() - currentRoom.countdownStart!) / 1000);
+      const remaining = 3 - elapsed;
+
+      if (remaining > 0) {
+        setCountdownNum(remaining);
+      } else if (remaining === 0) {
+        setCountdownNum("GO!");
+      } else {
+        setCountdownNum(null);
+        clearInterval(interval);
+        const isHost =
+          currentRoom.hostUid === user?.uid ||
+          currentRoom.hostName === user?.username ||
+          currentRoom.players[0]?.uid === user?.uid;
+        if (isHost) {
+          setRoomStatusRacing(currentRoom.roomId);
+        }
+      }
+    }, 400);
+
+    return () => clearInterval(interval);
+  }, [currentRoom?.status, currentRoom?.countdownStart, currentRoom?.roomId, user?.uid]);
 
   const handleLeaveLobby = async () => {
     if (currentRoom) {
@@ -113,10 +138,12 @@ export function RaceArenaModal({ isOpen, onClose }: RaceArenaModalProps) {
         name: user?.username || "SpeedTypist",
       });
       setCurrentRoom(null);
+      setMultiplayerRoom(null);
     }
   };
 
-  if (!isOpen) return null;
+  // Hide modal overlay during racing phase for zero distraction
+  if (!isOpen || currentRoom?.status === "racing") return null;
 
   const handleCreate = async () => {
     try {
