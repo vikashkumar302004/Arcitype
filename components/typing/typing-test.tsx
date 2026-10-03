@@ -108,9 +108,15 @@ export function TypingTest(props: TypingTestProps) {
     onRestart,
   } = useTypingTest({ ...props, onWrongKey, onKeyPress });
 
-  // Re-focus the hidden input on any keypress when it's blurred
+  // Re-focus the hidden input on any keypress when it's blurred (except when typing in modal inputs)
   useEffect(() => {
-    const handleGlobalKeyDown = () => {
+    const handleGlobalKeyDown = (e: KeyboardEvent) => {
+      if (
+        e.target instanceof HTMLInputElement ||
+        e.target instanceof HTMLTextAreaElement
+      ) {
+        return;
+      }
       if (!isFocused && inputRef.current) {
         inputRef.current.focus();
       }

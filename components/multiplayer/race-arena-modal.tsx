@@ -360,16 +360,57 @@ export function RaceArenaModal({ isOpen, onClose }: RaceArenaModalProps) {
               {tab === "join" && (
                 <div className="space-y-4 font-mono">
                   <div>
-                    <label className="block text-xs font-semibold text-muted-foreground mb-1.5">
-                      Enter 6-Character Room Code
-                    </label>
-                    <input
-                      className="w-full rounded-2xl border border-border bg-background py-3 px-4 text-center font-mono text-lg font-bold text-foreground placeholder:text-muted-foreground/30 focus:border-primary focus:outline-none uppercase tracking-widest"
-                      onChange={(e) => setJoinCode(e.target.value)}
-                      placeholder="ARC-9482"
-                      type="text"
-                      value={joinCode}
-                    />
+                    <div className="flex items-center justify-between mb-1.5">
+                      <label className="block text-xs font-semibold text-muted-foreground">
+                        Enter Room Code or Share Link
+                      </label>
+                      <button
+                        className="text-[11px] text-primary font-bold hover:underline flex items-center gap-1"
+                        onClick={async () => {
+                          try {
+                            const text = await navigator.clipboard.readText();
+                            if (text) {
+                              const cleaned = text.includes("room=")
+                                ? text.split("room=")[1].substring(0, 8)
+                                : text;
+                              setJoinCode(cleaned);
+                              handleJoin(cleaned);
+                            }
+                          } catch {
+                            /* ignore */
+                          }
+                        }}
+                        type="button"
+                      >
+                        📋 Paste Code
+                      </button>
+                    </div>
+
+                    <div className="relative flex items-center">
+                      <input
+                        className="w-full rounded-2xl border border-border bg-background py-3.5 px-4 text-center font-mono text-lg font-bold text-foreground placeholder:text-muted-foreground/30 focus:border-primary focus:outline-none uppercase tracking-widest"
+                        onChange={(e) => setJoinCode(e.target.value)}
+                        onKeyDown={(e) => {
+                          e.stopPropagation();
+                          if (e.key === "Enter") {
+                            handleJoin();
+                          }
+                        }}
+                        onPaste={(e) => {
+                          e.stopPropagation();
+                          const text = e.clipboardData.getData("text");
+                          if (text) {
+                            const cleaned = text.includes("room=")
+                              ? text.split("room=")[1].substring(0, 8)
+                              : text;
+                            setJoinCode(cleaned);
+                          }
+                        }}
+                        placeholder="ARC-9482"
+                        type="text"
+                        value={joinCode}
+                      />
+                    </div>
                   </div>
 
                   {joinError && (
