@@ -30,7 +30,7 @@ export interface RaceRoom {
   roomId: string;
   hostUid: string;
   hostName: string;
-  status: "lobby" | "countdown" | "racing" | "finished";
+  status: "lobby" | "countdown" | "racing" | "finished" | "disbanded";
   mode: "time" | "words" | "quote" | "code";
   modeDetail: string; // "15", "30", "60" | "10", "25", "50", "100"
   maxPlayers: number;
