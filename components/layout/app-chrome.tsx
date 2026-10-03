@@ -6,6 +6,7 @@ import {
   GithubLogo,
   SpeakerHigh,
   SpeakerSlash,
+  Sword,
   UserCircle,
 } from "@phosphor-icons/react";
 import { motion } from "motion/react";
@@ -23,6 +24,7 @@ import {
 import { LoginModal } from "@/components/auth/login-modal";
 import { UserDropdown } from "@/components/auth/user-dropdown";
 import { ArcitypeLogo } from "@/components/layout/keythm-logo";
+import { RaceArenaModal } from "@/components/multiplayer/race-arena-modal";
 import { SettingsPanel } from "@/components/settings/settings-panel";
 import { useSettings } from "@/components/settings/settings-provider";
 import { DynamicFavicon } from "@/components/theme/dynamic-favicon";
@@ -110,6 +112,7 @@ function SiteHeader() {
   const { soundEnabled, setSoundEnabled } = useSettings();
   const { isLoggedIn } = useAuth();
   const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
+  const [isRaceModalOpen, setIsRaceModalOpen] = useState(false);
 
   const dimHeader = typingActive;
 
@@ -154,6 +157,7 @@ function SiteHeader() {
   return (
     <>
       <LoginModal isOpen={isLoginModalOpen} onClose={() => setIsLoginModalOpen(false)} />
+      <RaceArenaModal isOpen={isRaceModalOpen} onClose={() => setIsRaceModalOpen(false)} />
       <motion.header
         animate={{ opacity: headerOpacity }}
         className="flex shrink-0 justify-center px-6 py-3 md:px-12 md:pt-5 md:pb-2"
@@ -161,7 +165,7 @@ function SiteHeader() {
         transition={{ duration: 0.4, ease: "easeInOut" }}
       >
         <div className="relative flex w-full max-w-5xl items-center justify-between gap-4">
-          {/* Left Group — Logo + Audio + Settings */}
+          {/* Left Group — Logo + Audio + Settings + Race Arena */}
           <div className="flex items-center gap-3 sm:gap-5">
             {/* Logo */}
             <button
@@ -176,8 +180,20 @@ function SiteHeader() {
               </span>
             </button>
 
-            {/* Shifted Audio & Settings */}
+            {/* Shifted Audio, Settings & Race Arena */}
             <div className="flex items-center gap-2">
+              {/* Race Arena Button */}
+              <motion.button
+                aria-label="Race Arena"
+                className="flex items-center gap-1.5 rounded-full border border-primary/40 bg-primary/15 px-3.5 py-1.5 text-xs font-bold text-primary transition-all hover:bg-primary/25 shadow-2xs"
+                onClick={() => setIsRaceModalOpen(true)}
+                type="button"
+                whileTap={{ scale: 0.96 }}
+              >
+                <Sword size={16} weight="duotone" />
+                <span>Race Arena</span>
+              </motion.button>
+
               {/* Audio toggle */}
               <motion.button
                 aria-label={soundEnabled ? "Mute audio" : "Unmute audio"}
