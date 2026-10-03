@@ -30,6 +30,7 @@ import {
   createMultiplayerRoom,
   finishPlayerRace,
   joinMultiplayerRoom,
+  leaveMultiplayerRoom,
   type RacePlayer,
   type RaceRoom,
   setRoomStatusRacing,
@@ -75,11 +76,16 @@ export function RaceArenaModal({ isOpen, onClose }: RaceArenaModalProps) {
     }
   }, []);
 
-  // Subscribe to Firebase Firestore room changes
+  // Subscribe to room updates
   useEffect(() => {
     if (!currentRoom) return;
 
     const unsubscribe = subscribeToRoom(currentRoom.roomId, (updatedRoom) => {
+      if (updatedRoom.status === "disbanded") {
+        setCurrentRoom(null);
+        setJoinError("Host has closed the race room.");
+        return;
+      }
       setCurrentRoom(updatedRoom);
 
       // Handle 3-2-1 countdown trigger
@@ -99,6 +105,16 @@ export function RaceArenaModal({ isOpen, onClose }: RaceArenaModalProps) {
 
     return () => unsubscribe();
   }, [currentRoom?.roomId, user?.uid]);
+
+  const handleLeaveLobby = async () => {
+    if (currentRoom) {
+      await leaveMultiplayerRoom(currentRoom.roomId, {
+        uid: user?.uid,
+        name: user?.username || "SpeedTypist",
+      });
+      setCurrentRoom(null);
+    }
+  };
 
   if (!isOpen) return null;
 
@@ -194,7 +210,10 @@ export function RaceArenaModal({ isOpen, onClose }: RaceArenaModalProps) {
           {/* Close button */}
           <button
             className="absolute right-5 top-5 rounded-full p-1.5 text-muted-foreground hover:bg-foreground/10 hover:text-foreground"
-            onClick={onClose}
+            onClick={async () => {
+              await handleLeaveLobby();
+              onClose();
+            }}
             type="button"
           >
             <X size={20} />
@@ -538,7 +557,7 @@ export function RaceArenaModal({ isOpen, onClose }: RaceArenaModalProps) {
               <div className="flex items-center justify-between border-t border-border/50 pt-4">
                 <button
                   className="rounded-xl border border-border px-4 py-2 text-xs font-semibold text-muted-foreground hover:text-foreground"
-                  onClick={() => setCurrentRoom(null)}
+                  onClick={handleLeaveLobby}
                   type="button"
                 >
                   Leave Lobby

@@ -663,3 +663,78 @@ export async function inviteFriendToRoom(
     /* ignore */
   }
 }
+
+// 9. Leave or Disband Room
+export async function leaveMultiplayerRoom(
+  roomId: string,
+  user: { uid?: string; name: string }
+): Promise<void> {
+  const cleanId = normalizeRoomCode(roomId);
+  const uid = user.uid || `anon`;
+
+  // Server API update
+  try {
+    const res = await fetch("/api/rooms", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "leave", roomId: cleanId, uid, playerName: user.name }),
+    });
+    if (res.ok) {
+      const data = await res.json();
+      if (data.room) {
+        saveLocalRoom(data.room);
+      }
+    }
+  } catch {
+    /* ignore */
+  }
+
+  // Firestore update
+  try {
+    const roomRef = doc(db, "rooms", cleanId);
+    const snap = await getDoc(roomRef);
+    if (snap.exists()) {
+      const room = snap.data() as RaceRoom;
+      const isHost =
+        room.hostUid === uid ||
+        room.hostName === user.name ||
+        room.players.some((p) => (p.uid === uid || p.name === user.name) && p.isHost);
+
+      if (isHost) {
+        await updateDoc(roomRef, { status: "disbanded", players: [] });
+      } else {
+        const updatedPlayers = room.players.filter(
+          (p) => p.uid !== uid && p.name !== user.name
+        );
+        await updateDoc(roomRef, { players: updatedPlayers });
+      }
+    }
+  } catch {
+    /* ignore */
+  }
+
+  // Local storage cleanup
+  const room = getLocalRoom(cleanId);
+  if (room) {
+    const isHost =
+      room.hostUid === uid ||
+      room.hostName === user.name ||
+      room.players.some((p) => (p.uid === uid || p.name === user.name) && p.isHost);
+
+    if (isHost) {
+      saveLocalRoom({ ...room, status: "disbanded", players: [] });
+      if (typeof window !== "undefined") {
+        try {
+          localStorage.removeItem(`arc-room-${cleanId}`);
+        } catch {
+          /* ignore */
+        }
+      }
+    } else {
+      const updatedPlayers = room.players.filter(
+        (p) => p.uid !== uid && p.name !== user.name
+      );
+      saveLocalRoom({ ...room, players: updatedPlayers });
+    }
+  }
+}

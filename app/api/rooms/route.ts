@@ -22,7 +22,7 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { action, room, roomId, player, uid, stats } = body;
+    const { action, room, roomId, player, uid, playerName, stats } = body;
 
     if (action === "create") {
       globalRooms.set(room.roomId, room);
@@ -41,8 +41,8 @@ export async function POST(request: Request) {
     if (action === "join") {
       const targetId = roomId || room?.roomId;
       const existing = globalRooms.get(targetId);
-      if (!existing) {
-        return NextResponse.json({ error: `Room ${targetId} not found` }, { status: 404 });
+      if (!existing || existing.status === "disbanded") {
+        return NextResponse.json({ error: `Room ${targetId} not found or closed` }, { status: 404 });
       }
 
       // Check if player exists
@@ -78,6 +78,35 @@ export async function POST(request: Request) {
 
       globalRooms.set(targetId, existing);
       return NextResponse.json(existing);
+    }
+
+    if (action === "leave") {
+      const targetId = roomId || room?.roomId;
+      const existing = globalRooms.get(targetId);
+      if (!existing) {
+        return NextResponse.json({ success: true });
+      }
+
+      const isHost =
+        existing.hostUid === uid ||
+        existing.hostName === playerName ||
+        existing.players.find((p: any) => (p.uid === uid || p.name === playerName) && p.isHost);
+
+      if (isHost) {
+        // Disband room for all players
+        existing.status = "disbanded";
+        existing.players = [];
+        globalRooms.set(targetId, existing);
+        setTimeout(() => globalRooms.delete(targetId), 5000);
+        return NextResponse.json({ success: true, room: existing });
+      } else {
+        // Remove individual player
+        existing.players = existing.players.filter(
+          (p: any) => p.uid !== uid && p.name !== playerName
+        );
+        globalRooms.set(targetId, existing);
+        return NextResponse.json({ success: true, room: existing });
+      }
     }
 
     if (action === "update") {
