@@ -52,14 +52,27 @@ export function generateRoomCode(): string {
 }
 
 export function normalizeRoomCode(input: string): string {
-  let cleaned = input.trim().toUpperCase().replace(/[^A-Z0-9]/g, "");
-  if (!cleaned.startsWith("ARC")) {
-    cleaned = `ARC${cleaned}`;
+  if (!input) return "";
+  let raw = input.trim().toUpperCase();
+  
+  // Extract code if user pasted a full URL
+  if (raw.includes("ROOM=")) {
+    raw = raw.split("ROOM=")[1].split("&")[0];
   }
-  if (cleaned.length > 3 && !cleaned.includes("-")) {
-    cleaned = `ARC-${cleaned.substring(3, 7)}`;
+
+  // Remove invalid characters except letters, digits, and hyphen
+  raw = raw.replace(/[^A-Z0-9-]/g, "");
+
+  if (raw.startsWith("ARC-")) {
+    return raw;
   }
-  return cleaned;
+  if (raw.startsWith("ARC") && raw.length > 3) {
+    return `ARC-${raw.substring(3)}`;
+  }
+  if (!raw.startsWith("ARC")) {
+    return `ARC-${raw}`;
+  }
+  return raw;
 }
 
 // 1. Create a new Multiplayer Room in Firestore
@@ -147,7 +160,7 @@ export async function joinMultiplayerRoom(
     const roomRef = doc(db, "rooms", cleanId);
     let snap = await getDoc(roomRef);
 
-    // Fallback if not found with exact normalized string
+    // Fallback search with raw trimmed input if needed
     if (!snap.exists()) {
       const rawRef = doc(db, "rooms", roomIdInput.trim().toUpperCase());
       snap = await getDoc(rawRef);
@@ -171,7 +184,6 @@ export async function joinMultiplayerRoom(
 
     let updatedPlayers = [...room.players];
     if (existingPlayerIndex >= 0) {
-      // Refresh user information
       updatedPlayers[existingPlayerIndex] = {
         ...updatedPlayers[existingPlayerIndex],
         name: user.name,
